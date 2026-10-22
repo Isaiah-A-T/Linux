@@ -172,6 +172,9 @@ class ArtTest(unittest.TestCase):
         self.assertEqual(art.best_match("Control", results), "870780")
         self.assertEqual(art.best_match("The Witcher 3: Wild Hunt - Game of the Year Edition", results), "292030")
         self.assertIsNone(art.best_match("Portal", results))
+        self.assertEqual(art.best_match("The Witcher 3", results), "292030")
+        self.assertEqual(art.best_match("Disco Elysium", [{"id": 632470, "name": "Disco Elysium - The Final Cut"}]), "632470")
+        self.assertIsNone(art.best_match("Portal", [{"id": 620, "name": "Portal 2"}]))
 
     def test_games_get_steam_art_and_apps_keep_icons(self):
         items = [

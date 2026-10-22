@@ -56,19 +56,25 @@ def normalize(title):
     return re.sub(r"^the ", "", t.strip())
 
 
+def _subtitle_of(name, want):
+    """True when a Steam name is the title plus a subtitle ("Disco Elysium - The Final Cut")."""
+    plain = re.sub(r"\s+", " ", re.sub(r"[™®©]", "", name.lower())).strip()
+    return any(plain.startswith(want + sep) for sep in (": ", " - ", " – "))
+
+
 def best_match(title, results):
     """The Steam app id whose name matches the title, or None."""
     want = normalize(title)
     if not want:
         return None
-    names = [(str(r.get("id")), normalize(r.get("name", ""))) for r in results if r.get("id")]
-    for appid, name in names:
+    names = [(str(r.get("id")), normalize(r.get("name", "")), r.get("name", "")) for r in results if r.get("id")]
+    for appid, name, _ in names:
         if name == want:
             return appid
-    for appid, name in names:
-        # "Control" matches "Control Ultimate Edition", but "Portal" doesn't match "Portal Knights".
-        shorter, longer = sorted((want, name), key=len)
-        if len(shorter) >= 4 and longer.startswith(shorter) and not longer[len(shorter):].strip():
+    raw = re.sub(r"\s+", " ", re.sub(r"[™®©]", "", title.lower())).strip()
+    for appid, _, original in names:
+        # "The Witcher 3" is "The Witcher 3: Wild Hunt", but "Portal" isn't "Portal 2".
+        if _subtitle_of(original, raw):
             return appid
     return None
 
