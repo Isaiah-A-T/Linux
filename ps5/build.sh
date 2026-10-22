@@ -60,6 +60,9 @@ mapfile -t pkgs < <(printf '%s\n' "${pkgs[@]}" | sort -u)
 if mountpoint -q "$root"; then umount -R "$root"; fi
 rm -rf "$root"
 mkdir -p "$root"
+# Make the root a mount point: arch-chroot and pacman's disk space check
+# need one ("could not determine root mount point /").
+mount --bind "$root" "$root"
 # -G: don't copy the build host's keyring; lumen-keyring.service makes a
 # fresh one on first boot.
 pacstrap -C "$conf" -G "$root" "${pkgs[@]}"
@@ -141,6 +144,8 @@ done
 # A fresh machine id on first boot, and no build leftovers.
 : > "$root/etc/machine-id"
 rm -rf "$root/var/cache/pacman/pkg/"* "$root/var/log/"*.log "$root/root/.bash_history"
+
+umount "$root"
 
 # --- Boot partition -------------------------------------------------------
 bootdir="$work/boot"
