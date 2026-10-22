@@ -8,7 +8,7 @@ from unittest import mock
 
 os.environ.setdefault("XDG_DATA_HOME", tempfile.mkdtemp())
 
-from lumend import jobs, recents, store, system, update  # noqa: E402
+from lumend import art, jobs, recents, store, system, update  # noqa: E402
 from lumend.launchers import gog, steam, vdf  # noqa: E402
 
 
@@ -208,6 +208,41 @@ class GreetdTest(unittest.TestCase):
             with self.assertRaises(ApiError):
                 users.login("fenta", "bad")
         self.assertEqual(seen[-1], {"type": "cancel_session"})
+
+
+class ArtTest(unittest.TestCase):
+    def test_matches_store_titles_to_steam(self):
+        results = [{"id": 11, "name": "Portal Knights"}, {"id": 870780, "name": "Control Ultimate Edition"},
+                   {"id": 292030, "name": "The Witcher® 3: Wild Hunt"}]
+        self.assertEqual(art.best_match("Control", results), "870780")
+        self.assertEqual(art.best_match("The Witcher 3: Wild Hunt - Game of the Year Edition", results), "292030")
+        self.assertIsNone(art.best_match("Portal", results))
+        self.assertEqual(art.best_match("The Witcher 3", results), "292030")
+        self.assertEqual(art.best_match("Disco Elysium", [{"id": 632470, "name": "Disco Elysium - The Final Cut"}]), "632470")
+        self.assertIsNone(art.best_match("Portal", [{"id": 620, "name": "Portal 2"}]))
+
+    def test_games_get_steam_art_and_apps_keep_icons(self):
+        items = [
+            {"id": "steam:620", "title": "Portal 2", "kind": "game", "art": {}},
+            {"id": "gog:1", "title": "Frostpunk", "kind": "game",
+             "art": {"cover": "https://images.gog-statics.com/a.jpg"}},
+            {"id": "app:vlc", "title": "VLC", "kind": "app", "art": {"icon": "/api/icon?path=x"}},
+        ]
+        with mock.patch.object(art, "load_json", return_value={
+                art.normalize("Frostpunk"): {"appid": "323190", "background": None, "time": time.time()}}):
+            art.enrich(items, lookups=False)
+        portal, frostpunk, vlc = items
+        self.assertIn("620%2Flibrary_600x900", portal["art"]["cover"])
+        self.assertIn("323190%2Flibrary_hero", frostpunk["art"]["hero"])
+        self.assertIn("gog-statics", frostpunk["art"]["cover"])  # store art is the fallback
+        self.assertIn("placeholder-art", frostpunk["art"]["cover"])
+        self.assertEqual(vlc["art"], {"icon": "/api/icon?path=x"})
+
+    def test_only_image_cdns_are_fetched(self):
+        self.assertTrue(art.allowed("https://shared.steamstatic.com/x.jpg"))
+        self.assertFalse(art.allowed("http://cdn.cloudflare.steamstatic.com/x.jpg"))
+        self.assertFalse(art.allowed("https://evilsteamstatic.com/x.jpg"))
+        self.assertFalse(art.allowed("https://127.0.0.1/x.jpg"))
 
 
 if __name__ == "__main__":

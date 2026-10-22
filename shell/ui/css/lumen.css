@@ -73,7 +73,10 @@ svg.i { width: 1.5rem; height: 1.5rem; flex: none; stroke: currentColor; fill: n
   opacity: 0; transition: opacity 0.8s var(--ease);
   mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.6) 45%, transparent 85%);
 }
-#wall .hero.on { opacity: 0.55; }
+#wall .hero.on { opacity: 0.8; animation: heroZoom 24s ease-out both; }
+#wall .blob { transition: opacity 0.8s var(--ease); }
+#wall.game .blob { opacity: 0.18; }
+@keyframes heroZoom { from { transform: scale(1.08); } to { transform: scale(1); } }
 #wall .shade { position: absolute; inset: 0;
   background: radial-gradient(120% 90% at 50% 0%, transparent 30%, rgba(4, 6, 12, 0.85) 100%); }
 @keyframes drift {

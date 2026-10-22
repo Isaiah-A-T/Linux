@@ -80,7 +80,7 @@ export function render(ctx, params) {
       return;
     }
     paint();
-    setHero(app.screenshots?.[0] || null);
+    setHero(null); // only games change the background
     ctx.ready();
   }
 

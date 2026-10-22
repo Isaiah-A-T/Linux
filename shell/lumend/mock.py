@@ -113,13 +113,14 @@ _PALETTES = [
 ]
 
 
-def art_svg(key, shape="cover"):
+def art_svg(key, shape="cover", title=None):
     """Generated placeholder artwork: a gradient with the title on it."""
-    title = key.split(":")[1] if key.count(":") >= 1 else key
-    for item_id, name, *_ in _LIBRARY:
-        if item_id == key:
-            title = name
-            break
+    if not title:
+        title = key.split(":")[1] if key.count(":") >= 1 else key
+        for item_id, name, *_ in _LIBRARY:
+            if item_id == key:
+                title = name
+                break
     digest = int(hashlib.sha1(key.encode()).hexdigest(), 16)
     a, b = _PALETTES[digest % len(_PALETTES)]
     angle = digest % 360

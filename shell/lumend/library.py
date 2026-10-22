@@ -4,7 +4,7 @@ import os
 import threading
 import time
 
-from . import apps, jobs, mock, recents
+from . import apps, art, jobs, mock, recents
 from .launchers import LAUNCHERS
 from .util import ApiError, mock_enabled
 
@@ -26,12 +26,20 @@ def items(refresh=False):
             except Exception:  # one broken launcher must not empty the library
                 continue
         out.extend(apps.list_apps())
+        art.enrich(out)
         _cache.update(time=time.time(), items=out)
         return out
 
 
+def _forget():
+    _cache["time"] = 0
+
+
+art.on_found(_forget)
+
+
 def _mock_items():
-    out = mock.library()
+    out = art.enrich(mock.library())
     installed = mock.state.setdefault("installed_extra", set())
     for item in out:
         if item["id"] in installed:

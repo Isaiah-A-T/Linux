@@ -71,6 +71,16 @@ airplane mode. Settings links to it instead of repeating those controls.
   with GE-Proton. Each game gets its own prefix in `~/Games/Prefixes/`.
   Wine is also installed for the rare title that runs better outside Proton.
 
+## Game art
+
+Every game shows real cover art, and on Home and in the Library the
+background changes to the focused game's artwork. Apps keep the normal
+background. Steam games use their own Steam images. Epic, GOG and desktop
+games are matched to Steam by title in the background (`shell/lumend/art.py`),
+with the store's own images and then a generated cover as fallbacks. lumend
+downloads each image once into `~/.cache/lumen/art`, so art keeps working
+offline.
+
 ## Store
 
 The Store searches Flathub (`flathub.org/api/v2`) and the Snap Store
