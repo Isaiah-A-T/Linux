@@ -148,16 +148,17 @@ done
 # still running when the timeout hits (exit 124) is the good case.
 if [[ -n "${LUMEN_SMOKE_TEST:-}" ]]; then
 	echo "==> Smoke test: start setup on a virtual display"
+	# The host's pacman: the image's keyring is only set up on first boot.
 	smoke_pkgs=()
 	for p in xorg-server-xvfb xorg-xauth; do
 		arch-chroot "$root" pacman -Q "$p" >/dev/null 2>&1 || smoke_pkgs+=("$p")
 	done
-	if (( ${#smoke_pkgs[@]} == 0 )) || arch-chroot "$root" pacman -S --noconfirm "${smoke_pkgs[@]}" >/dev/null; then
+	if (( ${#smoke_pkgs[@]} == 0 )) || pacman -r "$root" --config "$conf" -S --noconfirm "${smoke_pkgs[@]}" >/dev/null; then
 		arch-chroot "$root" runuser -u player -- sh -c \
 			'cd ~ && timeout 45 xvfb-run -a -s "-screen 0 1920x1080x24" /usr/bin/lumen-installer --no-padmap; echo "lumen-installer exit: $?"' 2>&1 | tail -n 80 || true
 		echo "--- calamares session.log"
 		tail -n 150 "$root/root/.cache/calamares/session.log" 2>/dev/null || echo "(no session.log)"
-		(( ${#smoke_pkgs[@]} == 0 )) || arch-chroot "$root" pacman -Rns --noconfirm "${smoke_pkgs[@]}" >/dev/null || true
+		(( ${#smoke_pkgs[@]} == 0 )) || pacman -r "$root" --config "$conf" -Rns --noconfirm "${smoke_pkgs[@]}" >/dev/null || true
 	fi
 	rm -rf "$root/root/.cache/calamares" "$root/tmp/lumen-installer"
 fi
