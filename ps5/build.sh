@@ -39,12 +39,10 @@ if [[ ! -f "$localrepo/lumen.db.tar.gz" ]]; then
 fi
 
 conf="$work/pacman.conf"
-cp /etc/pacman.conf "$conf"
-grep -q '^\[multilib\]' "$conf" ||
-	printf '\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' >> "$conf"
-printf '\n[lumen]\nSigLevel = Optional TrustAll\nServer = file://%s\n' "$localrepo" >> "$conf"
+cp "$here/pacman.conf" "$conf"
 # pacman's download sandbox (Landlock) doesn't work inside containers.
-grep -q '^DisableSandbox' "$conf" || sed -i '/^\[options\]/a DisableSandbox' "$conf"
+sed -i '/^\[options\]/a DisableSandbox' "$conf"
+printf '\n[lumen]\nSigLevel = Optional TrustAll\nServer = file://%s\n' "$localrepo" >> "$conf"
 
 mapfile -t pkgs < <(
 	list "$here/packages.x86_64" "$repo_root/iso/packages.x86_64"
@@ -74,6 +72,9 @@ sed -i \
 	"$root/etc/mkinitcpio.conf"
 echo "KEYMAP=us" > "$root/etc/vconsole.conf"
 
+# The target's pacman.conf: the same repos, without the build-time [lumen].
+install -Dm644 "$here/pacman.conf" "$root/etc/pacman.conf"
+
 # The ps5-linux kernel replaces linux and linux-api-headers (it provides
 # both); --ask 4 answers "remove the conflicting package" with yes.
 cp "$kernel_pkg" "$root/tmp/"
@@ -96,9 +97,6 @@ while read -r path perms _; do
 done < "$repo_root/installer/file-permissions.txt"
 chmod 755 "$root/usr/lib/lumen-ps5/"* "$root/usr/share/lumen-installer/ps5-setup-done"
 
-# Target pacman.conf: multilib on, no build-time local repo.
-grep -q '^\[multilib\]' "$root/etc/pacman.conf" ||
-	printf '\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' >> "$root/etc/pacman.conf"
 
 echo lumen > "$root/etc/hostname"
 sed -i 's/^#\(en_US.UTF-8 UTF-8\)/\1/' "$root/etc/locale.gen"
