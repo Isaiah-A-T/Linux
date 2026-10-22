@@ -1,0 +1,8 @@
+#!/bin/sh
+# Live ISO only: create the "player" account the first session logs into.
+set -eu
+id player >/dev/null 2>&1 && exit 0
+useradd -m -G wheel,video,input,audio -s /bin/bash -c "Player" player
+passwd -d player
+echo '%wheel ALL=(ALL:ALL) NOPASSWD: ALL' > /etc/sudoers.d/10-live
+chmod 440 /etc/sudoers.d/10-live

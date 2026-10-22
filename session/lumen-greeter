@@ -1,0 +1,18 @@
+#!/bin/sh
+# PS5-style sign-in screen. greetd runs this as the "greeter" user; lumend in
+# greeter mode talks to greetd over $GREETD_SOCK and starts lumen-session.
+set -eu
+
+export LUMEN_PORT="${LUMEN_GREETER_PORT:-7778}"
+# The greeter account may not have a writable home; keep its browser profile
+# and settings in the runtime dir logind gives every session.
+runtime="${XDG_RUNTIME_DIR:-/tmp/lumen-greeter-$(id -u)}"
+mkdir -p "$runtime"
+export XDG_STATE_HOME="$runtime/state"
+export XDG_DATA_HOME="$runtime/data"
+
+lumend --mode greeter &
+daemon=$!
+trap 'kill "$daemon" 2>/dev/null' EXIT INT TERM
+
+cage -s -- lumen-ui "?mode=greeter"

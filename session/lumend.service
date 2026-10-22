@@ -1,0 +1,10 @@
+[Unit]
+Description=Lumen shell daemon
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/lumend
+Restart=on-failure
+
+[Install]
+WantedBy=graphical-session.target

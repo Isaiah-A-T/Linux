@@ -1,0 +1,5 @@
+# Built from the AUR by build.sh, unless pacman already finds them in the
+# official repos.
+legendary
+umu-launcher
+snapd

@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Lumen
+Comment=Console-style fullscreen session
+Exec=lumen-session
+Type=Application
+DesktopNames=Lumen

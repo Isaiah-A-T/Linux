@@ -1,0 +1,29 @@
+#!/bin/sh
+# Fullscreen Chromium pointed at lumend. Used inside gamescope (session) and
+# cage (greeter). Pass a URL query such as "?mode=greeter" as $1.
+set -eu
+
+port="${LUMEN_PORT:-7777}"
+state="${XDG_STATE_HOME:-$HOME/.local/state}/lumen/chromium"
+mkdir -p "$state"
+
+# Wait for the daemon so the first paint is the shell, not an error page.
+i=0
+until python3 -c "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:$port/api/ping', timeout=1)" 2>/dev/null; do
+	i=$((i + 1))
+	[ "$i" -ge 50 ] && break
+	sleep 0.2
+done
+
+exec chromium \
+	--kiosk \
+	--app="http://127.0.0.1:$port/${1:-}" \
+	--user-data-dir="$state" \
+	--noerrdialogs \
+	--no-first-run \
+	--disable-session-crashed-bubble \
+	--disable-translate \
+	--disable-pinch \
+	--overscroll-history-navigation=0 \
+	--autoplay-policy=no-user-gesture-required \
+	--check-for-update-interval=31536000

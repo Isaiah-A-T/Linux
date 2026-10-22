@@ -1,0 +1,20 @@
+# Lumen shell, session scripts and daemon, packaged from this repository.
+# build.sh sets LUMEN_SRC to the repository root.
+pkgname=lumen
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Console-style fullscreen shell for Lumen OS"
+arch=('any')
+url="https://github.com/Isaiah-A-T/Linux"
+license=('MIT')
+depends=('python' 'gamescope' 'chromium' 'cage' 'greetd' 'networkmanager' 'bluez-utils'
+         'wireplumber' 'flatpak' 'xorg-xprop')
+optdepends=('steam: Steam library'
+            'legendary: Epic Games library'
+            'gogdl: GOG library'
+            'umu-launcher: run Epic and GOG games with Proton'
+            'snapd: Snap Store apps')
+
+package() {
+	make -C "${LUMEN_SRC:?set LUMEN_SRC to the repository root}" install DESTDIR="$pkgdir" PREFIX=/usr
+}
