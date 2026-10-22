@@ -18,6 +18,12 @@ trap 'sudo -n kill "$padmap" 2>/dev/null' EXIT
 qml=$(command -v qml6 || echo /usr/lib/qt6/bin/qml)
 crashes=0
 
+# The PS5 image asks for a controller first (Bluetooth pairing); the ISO
+# doesn't ship this screen and goes straight to the power-on screen.
+if [[ -e "$share/pair.qml" ]]; then
+	QT_QPA_PLATFORM=xcb QML_XHR_ALLOW_FILE_READ=1 "$qml" "$share/pair.qml"
+fi
+
 while true; do
 	QT_QPA_PLATFORM=xcb "$qml" "$share/start.qml"
 	case $? in

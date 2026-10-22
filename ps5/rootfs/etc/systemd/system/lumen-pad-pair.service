@@ -7,7 +7,6 @@ Wants=bluetooth.service
 
 [Service]
 Type=simple
-ExecStartPre=/bin/sleep 3
 ExecStart=/usr/lib/lumen-ps5/pad-pair
 
 [Install]
