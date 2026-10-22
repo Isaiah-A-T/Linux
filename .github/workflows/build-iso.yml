@@ -27,6 +27,8 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 300
+    permissions:
+      contents: write  # publish the [lumen] pacman repo release
     steps:
       # The ISO pulls in Steam, Chromium, Wine and Calamares; the stock runner
       # needs room for the package cache, the root filesystem and the image.
@@ -50,6 +52,14 @@ jobs:
           sudo chown -R "$USER" .
           sha256sum *.iso | tee SHA256SUMS
           ls -lh
+
+      # Installed systems update the shell from this repo (Settings › System update).
+      - name: Publish the pacman repo
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: .github/ci/publish-repo.sh out/repo lumen-repo
 
       - uses: actions/upload-artifact@v4
         with:

@@ -22,3 +22,20 @@ echo "MAKEFLAGS=\"-j$(nproc)\"" >> /etc/makepkg.conf
 
 git config --global --add safe.directory "$src"
 SUDO_USER=builder WORK_DIR=/tmp/lumen-iso "$src/iso/build.sh" "$src/out"
+
+# The packages we built become the [lumen] pacman repo that installed systems
+# update from (Settings › System update); publish-repo.sh uploads it to a
+# GitHub release. Release asset names can't hold ':' (package epochs), so
+# rename those and index the repo again under the new names.
+repo="$src/out/repo"
+rm -rf "$repo"
+mkdir -p "$repo"
+cp /tmp/lumen-iso/localrepo/*.pkg.tar.zst "$repo/"
+for f in "$repo"/*:*; do
+	if [[ -e "$f" ]]; then mv "$f" "${f//:/.}"; fi
+done
+repo-add -q "$repo/lumen.db.tar.gz" "$repo"/*.pkg.tar.zst
+# pacman asks for lumen.db and lumen.files, which repo-add makes as symlinks.
+for f in lumen.db lumen.files; do
+	cp --remove-destination "$(readlink -f "$repo/$f")" "$repo/$f"
+done

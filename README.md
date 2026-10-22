@@ -16,6 +16,10 @@ a controller, a mouse, or a keyboard.
 * **Top bar.** The left side is you: account, Quick Settings (Wi-Fi, Bluetooth,
   sound, brightness, battery) and Settings. The right side is for fun: music,
   screenshot album, themes and notifications.
+* **System update** (Settings) updates the OS, the Lumen shell, and Flatpak
+  and Snap apps in place, without reinstalling. The shell and the packages
+  built from the AUR come from the `[lumen]` pacman repo that CI publishes to
+  the `lumen-repo` release on every push to `main`.
 * **Sign-in** is a PS5-style user picker running on greetd.
 * Under the hood it runs on gamescope, like SteamOS.
 

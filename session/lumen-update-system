@@ -1,0 +1,61 @@
+#!/bin/bash
+# Root half of Settings › System update. lumend runs it through pkexec;
+# session/polkit/50-lumen.rules lets admins (wheel) do so without a password.
+#
+#   lumen-update-system check     print pending updates, "name old -> new"
+#   lumen-update-system upgrade   update every pacman package (the OS and the
+#                                 Lumen shell) and any system-wide Flatpaks
+#
+# The Lumen shell and the packages built from the AUR come from the [lumen]
+# pacman repo that CI publishes on the repository's "lumen-repo" release. Set
+# LUMEN_REPO_URL in /etc/lumen/update.conf to use another one.
+set -euo pipefail
+export LC_ALL=C
+
+LUMEN_REPO_URL="https://github.com/Isaiah-A-T/Linux/releases/download/lumen-repo"
+[[ -r /etc/lumen/update.conf ]] && . /etc/lumen/update.conf
+
+conf=/etc/pacman.conf
+
+# Systems installed before updates existed don't list the Lumen repo, and the
+# stock pacman.conf leaves multilib (Steam's 32-bit libraries) off.
+ensure_repos() {
+	grep -q '^\[multilib\]' "$conf" ||
+		printf '\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' >> "$conf"
+	grep -q '^\[lumen\]' "$conf" ||
+		printf '\n[lumen]\nSigLevel = Optional TrustAll\nServer = %s\n' "$LUMEN_REPO_URL" >> "$conf"
+}
+
+# Like checkupdates: sync a copy of the databases so the real ones stay put
+# (syncing them without upgrading would leave a partial upgrade behind).
+check() {
+	ensure_repos
+	local db
+	db=$(mktemp -d /var/tmp/lumen-update.XXXXXX)
+	trap 'rm -rf "$db"' EXIT
+	ln -s /var/lib/pacman/local "$db/local"
+	cp -a /var/lib/pacman/sync "$db/" 2>/dev/null || true
+	pacman -Sy --dbpath "$db" --logfile /dev/null >/dev/null
+	# -Qu exits 1 when nothing is out of date.
+	pacman -Qu --dbpath "$db" || [[ $? -eq 1 ]]
+}
+
+upgrade() {
+	ensure_repos
+	# A system left alone for months may not know the keys newer packages
+	# are signed with, so take the keyring first (the one partial upgrade
+	# Arch recommends).
+	pacman -Sy --needed --noconfirm archlinux-keyring
+	pacman -Su --noconfirm
+	if command -v flatpak >/dev/null && [[ -n "$(flatpak list --system --columns=application)" ]]; then
+		flatpak update --system --noninteractive -y
+	fi
+}
+
+# pacman may replace this file while it runs, and bash reads scripts as it
+# goes, so exit from inside the case (parsed up front) before reading on.
+case "${1:-}" in
+	check) check; exit 0 ;;
+	upgrade) upgrade; exit 0 ;;
+	*) echo "usage: lumen-update-system check|upgrade" >&2; exit 2 ;;
+esac

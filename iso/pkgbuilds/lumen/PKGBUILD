@@ -8,12 +8,21 @@ arch=('any')
 url="https://github.com/Isaiah-A-T/Linux"
 license=('MIT')
 depends=('python' 'gamescope' 'chromium' 'cage' 'greetd' 'networkmanager' 'bluez-utils'
-         'wireplumber' 'flatpak' 'xorg-xprop')
+         'wireplumber' 'flatpak' 'xorg-xprop' 'polkit')
 optdepends=('steam: Steam library'
             'legendary: Epic Games library'
             'gogdl: GOG library'
             'umu-launcher: run Epic and GOG games with Proton'
             'snapd: Snap Store apps')
+
+# Settings › System update installs the shell from the [lumen] repo, so every
+# commit needs a newer version: 0.1.0.r<commit date>.<commit time>.
+pkgver() {
+	local base
+	base=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' "${LUMEN_SRC:?}/shell/lumend/__init__.py")
+	# makepkg runs as a build user who doesn't own the checkout.
+	git -c safe.directory="$LUMEN_SRC" -C "$LUMEN_SRC" log -1 --format="${base}.r%cd" --date=format:%Y%m%d.%H%M%S 2>/dev/null || echo "$base"
+}
 
 package() {
 	make -C "${LUMEN_SRC:?set LUMEN_SRC to the repository root}" install DESTDIR="$pkgdir" PREFIX=/usr

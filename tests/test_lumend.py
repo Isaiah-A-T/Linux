@@ -8,7 +8,7 @@ from unittest import mock
 
 os.environ.setdefault("XDG_DATA_HOME", tempfile.mkdtemp())
 
-from lumend import recents, store, system  # noqa: E402
+from lumend import jobs, recents, store, system, update  # noqa: E402
 from lumend.launchers import gog, steam, vdf  # noqa: E402
 
 
@@ -94,6 +94,51 @@ class StoreTest(unittest.TestCase):
     def test_install_rejects_bad_ids(self):
         with self.assertRaises(Exception):
             store.install("flatpak", "foo; rm -rf /")
+
+
+class UpdateTest(unittest.TestCase):
+    def test_parse_pending(self):
+        text = "linux 6.17.3.arch1-1 -> 6.17.5.arch1-1\nsteam 1.0.0.83-1 -> 1.0.0.84-1 [ignored]\n:: junk\n"
+        pending = update.parse_pending(text)
+        self.assertEqual([p["name"] for p in pending], ["linux", "steam"])
+        self.assertEqual(pending[0]["new"], "6.17.5.arch1-1")
+        self.assertTrue(pending[1]["ignored"])
+
+    def test_pacman_progress_counts_install_lines_only(self):
+        self.assertEqual(update.parse_pacman_progress("(10/40) upgrading mesa"), 0.25)
+        self.assertEqual(update.parse_pacman_progress("( 3/12) installing lumen"), 0.25)
+        self.assertIsNone(update.parse_pacman_progress("(10/40) checking keys in keyring"))
+        self.assertIsNone(update.parse_pacman_progress(":: Starting full system upgrade..."))
+
+    def test_last_upgrade_reads_the_latest_entry(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".log", delete=False) as f:
+            f.write("[2026-10-01T10:00:00+0000] [PACMAN] starting full system upgrade\n"
+                    "[2026-10-01T10:05:00+0000] [ALPM] upgraded mesa (1 -> 2)\n"
+                    "[2026-10-20T08:30:00+0000] [PACMAN] starting full system upgrade\n")
+        try:
+            self.assertEqual(update.last_upgrade(f.name), 1792485000.0)
+        finally:
+            os.unlink(f.name)
+        self.assertIsNone(update.last_upgrade("/nonexistent/pacman.log"))
+
+    def test_steps_run_in_order_and_failures_do_not_stop_later_steps(self):
+        steps = [
+            ("one", ["sh", "-c", "echo '(1/2) upgrading a'; echo '(2/2) upgrading b'"], 3, update.parse_pacman_progress),
+            ("two", ["sh", "-c", "echo 50%; exit 3"], 1, jobs.percent),
+            ("three", ["true"], 1, None),
+        ]
+        seen = {}
+        job = jobs.start_steps("t", steps, on_done=lambda j: seen.update(state=j["state"]))
+        for _ in range(100):
+            current = next(j for j in jobs.all_jobs() if j["id"] == job["id"])
+            if current["state"] != "running":
+                break
+            time.sleep(0.05)
+        self.assertEqual(current["state"], "failed")
+        self.assertEqual(current["codes"], [0, 3, 0])
+        self.assertEqual(current["message"], "two failed")
+        self.assertEqual(current["progress"], 100.0)
+        self.assertEqual(seen["state"], "running")  # the hook runs before the job finishes
 
 
 class RecentsTest(unittest.TestCase):

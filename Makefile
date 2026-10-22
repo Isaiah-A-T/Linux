@@ -20,6 +20,8 @@ install:
 	install -Dm755 session/lumen-greeter $(DESTDIR)$(PREFIX)/bin/lumen-greeter
 	install -Dm755 session/lumen-ui $(DESTDIR)$(PREFIX)/bin/lumen-ui
 	install -Dm755 session/lumend $(DESTDIR)$(PREFIX)/bin/lumend
+	install -Dm755 session/lumen-update-system $(DESTDIR)$(PREFIX)/lib/lumen/lumen-update-system
 	install -Dm644 session/lumend.service $(DESTDIR)$(PREFIX)/lib/systemd/user/lumend.service
 	install -Dm644 session/polkit/50-lumen.rules $(DESTDIR)$(PREFIX)/share/polkit-1/rules.d/50-lumen.rules
+	install -Dm644 session/polkit/org.lumenos.update.policy $(DESTDIR)$(PREFIX)/share/polkit-1/actions/org.lumenos.update.policy
 	install -Dm644 session/lumen.desktop $(DESTDIR)$(PREFIX)/share/wayland-sessions/lumen.desktop
