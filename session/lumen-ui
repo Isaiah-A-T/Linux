@@ -17,6 +17,7 @@ done
 
 exec chromium \
 	--kiosk \
+	--ozone-platform-hint=auto \
 	--app="http://127.0.0.1:$port/${1:-}" \
 	--user-data-dir="$state" \
 	--noerrdialogs \

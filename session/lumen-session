@@ -13,14 +13,27 @@ else
 	lumend &
 fi
 
+# Run a client fullscreen. gamescope needs Vulkan; on VMs and GPUs without
+# it, it exits straight away, so fall back to cage (plain Wayland kiosk).
+# LUMEN_GAMESCOPE_ARGS lets a user force e.g. "-W 1920 -H 1080 -r 60";
+# it is unquoted on purpose so it word-splits.
+fullscreen() {
+	started=$(date +%s)
+	# shellcheck disable=SC2086
+	gamescope ${LUMEN_GAMESCOPE_ARGS:-} --adaptive-sync -- "$@" && exit 0
+	if [ $(($(date +%s) - started)) -lt 15 ]; then
+		echo "lumen-session: gamescope failed, using cage" >&2
+		exec cage -s -- "$@"
+	fi
+	exit 1
+}
+
 # On the live ISO, the first screen is the installer (first-start style).
 # It is provided by the installer package as lumen-installer-session.
-if [ -d /run/archiso ] && command -v lumen-installer-session >/dev/null 2>&1 && [ -z "${LUMEN_SKIP_INSTALLER:-}" ]; then
-	# shellcheck disable=SC2086
-	exec gamescope ${LUMEN_GAMESCOPE_ARGS:-} -- lumen-installer-session
+# Booting with lumen.skip_installer goes straight to the shell.
+if [ -d /run/archiso ] && command -v lumen-installer-session >/dev/null 2>&1 &&
+	[ -z "${LUMEN_SKIP_INSTALLER:-}" ] && ! grep -qw lumen.skip_installer /proc/cmdline; then
+	fullscreen lumen-installer-session
 fi
 
-# gamescope picks the display's native mode; LUMEN_GAMESCOPE_ARGS lets a user
-# force e.g. "-W 1920 -H 1080 -r 60". Unquoted on purpose so it word-splits.
-# shellcheck disable=SC2086
-exec gamescope ${LUMEN_GAMESCOPE_ARGS:-} --adaptive-sync -- lumen-ui
+fullscreen lumen-ui
