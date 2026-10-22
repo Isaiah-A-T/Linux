@@ -6,7 +6,7 @@ import { focus, onFocus } from "../focus.js";
 import { openDetails, launch } from "../details.js";
 import { confirmSheet, toast } from "../layers.js";
 import { openPower } from "../quick.js";
-import { setHero, state } from "../state.js";
+import { setGameHero, state } from "../state.js";
 
 export function render(ctx) {
   const kicker = h("div.kicker");
@@ -24,10 +24,10 @@ export function render(ctx) {
         h("div.kicker", {}, item.kind === "app" ? "App" : SOURCE_LABEL[item.source] || ""),
         h("h1", {}, item.title),
         h("div.meta", {}, timeAgo(item.last_played)));
-      setHero(item.art?.hero || item.art?.cover);
+      setGameHero(item);
     } else {
       fade.append(h("div.kicker", {}, "Lumen"), h("h1", {}, greeting()), h("div.meta", {}, "Your library, apps and store, all in one place."));
-      setHero(null);
+      setGameHero(null);
     }
     hero.replaceChildren(fade);
   }
