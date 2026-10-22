@@ -1,0 +1,27 @@
+# GOG downloader used by Heroic; Lumen uses it directly for GOG accounts.
+pkgname=gogdl
+pkgver=r0
+pkgrel=1
+pkgdesc="GOG download and launch helper (from the Heroic project)"
+arch=('any')
+url="https://github.com/Heroic-Games-Launcher/heroic-gogdl"
+license=('GPL-3.0-only')
+depends=('python' 'python-requests')
+makedepends=('git' 'python-build' 'python-installer' 'python-setuptools' 'python-wheel')
+source=("git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+	cd heroic-gogdl
+	printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+	cd heroic-gogdl
+	python -m build --wheel --no-isolation
+}
+
+package() {
+	cd heroic-gogdl
+	python -m installer --destdir="$pkgdir" dist/*.whl
+}

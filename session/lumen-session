@@ -1,0 +1,26 @@
+#!/bin/sh
+# Lumen console session: start the daemon, then gamescope running the shell.
+set -eu
+
+export XDG_CURRENT_DESKTOP=Lumen
+export XDG_SESSION_TYPE=wayland
+export LUMEN_PORT="${LUMEN_PORT:-7777}"
+
+if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
+	systemctl --user import-environment XDG_CURRENT_DESKTOP XDG_SESSION_TYPE LUMEN_PORT
+	systemctl --user start lumend.service
+else
+	lumend &
+fi
+
+# On the live ISO, the first screen is the installer (first-start style).
+# It is provided by the installer package as lumen-installer-session.
+if [ -d /run/archiso ] && command -v lumen-installer-session >/dev/null 2>&1 && [ -z "${LUMEN_SKIP_INSTALLER:-}" ]; then
+	# shellcheck disable=SC2086
+	exec gamescope ${LUMEN_GAMESCOPE_ARGS:-} -- lumen-installer-session
+fi
+
+# gamescope picks the display's native mode; LUMEN_GAMESCOPE_ARGS lets a user
+# force e.g. "-W 1920 -H 1080 -r 60". Unquoted on purpose so it word-splits.
+# shellcheck disable=SC2086
+exec gamescope ${LUMEN_GAMESCOPE_ARGS:-} --adaptive-sync -- lumen-ui

@@ -1,0 +1,12 @@
+[Unit]
+Description=Create the Lumen live user
+Before=greetd.service
+After=systemd-sysusers.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/lumen-live-setup
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
