@@ -9,6 +9,9 @@ inter-font
 # Controller support while the installer runs (lumen-padmap)
 python-evdev
 
+# Lets the root installer onto the gamescope display (lumen-installer)
+xorg-xhost
+
 # Partitioning and file systems Calamares can create
 kpmcore
 dosfstools
