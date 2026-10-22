@@ -1,0 +1,14 @@
+[Unit]
+Description=Grow the Lumen root partition to fill the USB drive
+DefaultDependencies=no
+After=local-fs-pre.target
+Before=local-fs.target
+ConditionPathExists=!/var/lib/lumen/rootfs-grown
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/lumen-ps5/grow-rootfs
+RemainAfterExit=yes
+
+[Install]
+WantedBy=local-fs.target

@@ -1,0 +1,26 @@
+#!/bin/bash
+# The image is flashed at its built size; grow the root partition (always
+# partition 1, right after the 500 MiB boot partition's slot) and its ext4
+# file system to the end of the USB drive. Runs once.
+set -euo pipefail
+
+root_dev=$(findmnt -no SOURCE /)
+disk=/dev/$(lsblk -ndo PKNAME "$root_dev")
+part=$(cat "/sys/class/block/$(basename "$root_dev")/partition")
+
+# Booting Linux from the PS5's M.2 slot needs ps5-linux-tools' own layout;
+# leave that alone. Only USB drives (sd*) are grown.
+if [[ "$(basename "$disk")" != sd* ]]; then
+	echo "grow-rootfs: $disk is not a USB drive, skipping"
+	exit 0
+fi
+
+# Move the backup GPT header to the real end of the drive, then extend the
+# partition into the free space and tell the kernel about it.
+sgdisk -e "$disk"
+echo ",+" | sfdisk --no-reread -N "$part" "$disk"
+partx -u --nr "$part" "$disk"
+resize2fs "$root_dev"
+
+mkdir -p /var/lib/lumen
+touch /var/lib/lumen/rootfs-grown

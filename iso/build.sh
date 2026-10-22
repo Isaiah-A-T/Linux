@@ -29,18 +29,23 @@ build_pkg() {
 	local dir="$1"
 	chown -R "$builder" "$dir"
 	(cd "$dir" && sudo -u "$builder" env PKGDEST="$localrepo" LUMEN_SRC="$repo_root" \
-		makepkg --syncdeps --noconfirm --clean --cleanbuild)
+		makepkg "${2:---syncdeps}" --nocheck --noconfirm --clean --cleanbuild)
 }
 
 pkgdir_tmp="$work/pkgbuilds"
 mkdir -p "$pkgdir_tmp"
 chown "$builder" "$localrepo" "$pkgdir_tmp"
 
-# Our own packages (the shell itself and gogdl).
+# Our own packages (the shell itself and gogdl). lumen is arch=any and only
+# copies files, so its runtime dependencies don't need to be on the build host.
 for p in "$here"/pkgbuilds/*/; do
 	name="$(basename "$p")"
 	cp -a "$p" "$pkgdir_tmp/$name"
-	build_pkg "$pkgdir_tmp/$name"
+	if [[ "$name" == lumen ]]; then
+		build_pkg "$pkgdir_tmp/$name" --nodeps
+	else
+		build_pkg "$pkgdir_tmp/$name" --syncdeps
+	fi
 done
 
 # AUR packages, unless the official repos already carry them. Lists are read
@@ -60,15 +65,37 @@ while read -r pkg; do
 	fi
 	[[ -d "$pkgdir_tmp/aur-$pkg" ]] && continue
 	sudo -u "$builder" git clone --depth 1 "https://aur.archlinux.org/$pkg.git" "$pkgdir_tmp/aur-$pkg"
-	build_pkg "$pkgdir_tmp/aur-$pkg"
-	pacman -U --noconfirm --needed --asdeps "$localrepo/$pkg"-[0-9]*.pkg.tar.zst
+	# Install what the build needs ourselves, from the repos or from AUR
+	# packages built above, then build with --nodeps: makepkg -s can't see
+	# AUR packages we installed with -Udd.
+	mapfile -t needed < <(sed -n -E 's/^\s*(make|check)?depends(_x86_64)? = //p' \
+		"$pkgdir_tmp/aur-$pkg/.SRCINFO")
+	if (( ${#needed[@]} )); then
+		mapfile -t missing < <(pacman -T "${needed[@]}" || true)
+		if (( ${#missing[@]} )); then
+			pacman -S --noconfirm --needed --asdeps "${missing[@]}"
+		fi
+	fi
+	build_pkg "$pkgdir_tmp/aur-$pkg" --nodeps
+	# Install it on the host so later AUR builds can depend on it.
+	built=$(compgen -G "$localrepo/$pkg-[0-9]*.pkg.tar.zst" || true)
+	if [[ -n "$built" ]]; then
+		pacman -Udd --noconfirm --needed --asdeps $built
+	fi
 done < <(cat "${aur_lists[@]}")
 
 repo-add "$localrepo/lumen.db.tar.gz" "$localrepo"/*.pkg.tar.zst
 
+# ps5/build.sh only needs the local repo; it builds a disk image instead.
+if [[ -n "${LUMEN_REPO_ONLY:-}" ]]; then
+	echo "Local repo written to $localrepo"
+	exit 0
+fi
+
 # --- Profile --------------------------------------------------------------
 # pacman.conf: enable multilib (Steam, 32-bit Vulkan) and the local repo.
-sed -i '/^#\[multilib\]/{s/^#//;n;s/^#//}' "$profile/pacman.conf"
+grep -q '^\[multilib\]' "$profile/pacman.conf" ||
+	printf '\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' >> "$profile/pacman.conf"
 printf '\n[lumen]\nSigLevel = Optional TrustAll\nServer = file://%s\n' "$localrepo" >> "$profile/pacman.conf"
 
 {

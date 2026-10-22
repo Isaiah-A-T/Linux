@@ -1,0 +1,32 @@
+#!/bin/bash
+# Root side of the end of first-boot setup on the PS5 image (see
+# lumen-finish-setup.service). The setup run itself already wrote the
+# sign-in greetd config and created the player's real profile.
+set -u
+
+was_active=0
+if systemctl -q is-active greetd.service; then
+	was_active=1
+	systemctl stop greetd.service
+fi
+
+# The temporary account that ran setup.
+if id player >/dev/null 2>&1; then
+	loginctl terminate-user player 2>/dev/null
+	pkill -KILL -u player 2>/dev/null
+	sleep 1
+	userdel -r player 2>/dev/null || userdel player
+fi
+rm -f /etc/sudoers.d/10-setup
+
+# Setup only runs once on this image, so drop the installer like an
+# installed system does.
+pacman -Rns --noconfirm calamares >/dev/null 2>&1 || echo "finish-setup: calamares not removed"
+rm -rf /etc/calamares /usr/share/lumen-installer
+rm -f /usr/bin/lumen-installer /usr/bin/lumen-installer-session /usr/bin/lumen-padmap \
+	/usr/share/applications/lumen-installer.desktop
+
+rm -f /var/lib/lumen/finish-setup
+# Don't wait on greetd: at boot this unit may run before it.
+(( was_active )) && systemctl --no-block start greetd.service
+exit 0

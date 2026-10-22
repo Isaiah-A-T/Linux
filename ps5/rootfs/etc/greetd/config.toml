@@ -1,0 +1,13 @@
+# PS5 image, first boot: start the console session as the temporary
+# "player" account, which shows the power-on screen and setup.
+# Setup replaces this file with one that starts at the sign-in screen.
+[terminal]
+vt = 1
+
+[default_session]
+command = "lumen-greeter"
+user = "greeter"
+
+[initial_session]
+command = "lumen-session"
+user = "player"

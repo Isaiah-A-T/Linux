@@ -111,7 +111,7 @@ _DEVICE = re.compile(r"^Device ([0-9A-F:]{17}) (.+)$", re.M)
 
 
 def _bt_devices(*filters):
-    return {mac: name for mac, name in _DEVICE.findall(run(["bluetoothctl", "devices", *filters]))}
+    return {mac: name for mac, name in _DEVICE.findall(run(["bluetoothctl", "devices", *filters], timeout=3))}
 
 
 def bluetooth_state():
@@ -119,7 +119,11 @@ def bluetooth_state():
         return mock.state["bluetooth"]
     if not have("bluetoothctl"):
         return {"available": False, "enabled": False, "devices": []}
-    powered = "Powered: yes" in run(["bluetoothctl", "show"])
+    # With no adapter or no bluetoothd this times out and returns "".
+    show = run(["bluetoothctl", "show"], timeout=3)
+    if "Controller" not in show:
+        return {"available": False, "enabled": False, "devices": []}
+    powered = "Powered: yes" in show
     devices = []
     if powered:
         paired = _bt_devices("Paired")

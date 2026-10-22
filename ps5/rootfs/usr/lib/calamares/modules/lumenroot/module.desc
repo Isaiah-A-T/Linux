@@ -1,0 +1,8 @@
+# Setup on the PS5 image configures the running system (dont-chroot), so
+# there is no mount step to set rootMountPoint. This job sets it to "/"
+# for the Python modules (localecfg) that read it.
+---
+type:       "job"
+name:       "lumenroot"
+interface:  "python"
+script:     "main.py"

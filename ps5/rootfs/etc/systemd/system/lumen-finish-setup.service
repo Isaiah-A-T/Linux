@@ -1,0 +1,14 @@
+# Started by setup's last page ("Go to sign-in"), and at boot in case setup
+# finished without it: removes the temporary first-boot account and the
+# installer, then restarts greetd at the sign-in screen.
+[Unit]
+Description=Finish Lumen first-boot setup
+ConditionPathExists=/var/lib/lumen/finish-setup
+After=systemd-user-sessions.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/lumen-ps5/finish-setup
+
+[Install]
+WantedBy=multi-user.target
