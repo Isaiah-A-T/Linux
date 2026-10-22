@@ -77,9 +77,18 @@ install -Dm644 "$here/pacman.conf" "$root/etc/pacman.conf"
 
 # The ps5-linux kernel replaces linux and linux-api-headers (it provides
 # both); --ask 4 answers "remove the conflicting package" with yes.
+# lumen-ps5-ntsync takes over linux's NTSYNC-MODULE for ntsync-autoload.
 # (Not via /tmp: arch-chroot mounts a fresh tmpfs there.)
-cp "$kernel_pkg" "$root/var/cache/pacman/pkg/"
-arch-chroot "$root" pacman -U --noconfirm --ask 4 "/var/cache/pacman/pkg/$(basename "$kernel_pkg")"
+ntsync_dir="$work/lumen-ps5-ntsync"
+rm -rf "$ntsync_dir"
+cp -a "$here/pkgbuilds/lumen-ps5-ntsync" "$ntsync_dir"
+chown -R "${SUDO_USER:-nobody}" "$ntsync_dir"
+(cd "$ntsync_dir" && sudo -u "${SUDO_USER:-nobody}" makepkg --nodeps --noconfirm)
+ntsync_pkg=$(compgen -G "$ntsync_dir/lumen-ps5-ntsync-*.pkg.tar.zst" | head -n1)
+cp "$kernel_pkg" "$ntsync_pkg" "$root/var/cache/pacman/pkg/"
+arch-chroot "$root" pacman -U --noconfirm --ask 4 \
+	"/var/cache/pacman/pkg/$(basename "$kernel_pkg")" \
+	"/var/cache/pacman/pkg/$(basename "$ntsync_pkg")"
 kver=$(ls -1 "$root/usr/lib/modules" | grep -v '^extramodules' | sort -V | tail -n1)
 # The package's install script builds the initramfs; make sure it exists.
 [[ -s "$root/boot/initrd.img-$kver" ]] ||
