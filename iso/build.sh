@@ -65,10 +65,23 @@ while read -r pkg; do
 	fi
 	[[ -d "$pkgdir_tmp/aur-$pkg" ]] && continue
 	sudo -u "$builder" git clone --depth 1 "https://aur.archlinux.org/$pkg.git" "$pkgdir_tmp/aur-$pkg"
-	build_pkg "$pkgdir_tmp/aur-$pkg" --syncdeps
-	# Install it on the host so later AUR builds can depend on it.
+	# Only build-time dependencies go on the build host; runtime ones (for
+	# umu-launcher that is most of Steam's runtime) are resolved when the ISO's
+	# root filesystem is installed.
+	mapfile -t needed < <(sed -n -E 's/^\s*(makedepends|checkdepends) = //p' \
+		"$pkgdir_tmp/aur-$pkg/.SRCINFO")
+	if (( ${#needed[@]} )); then
+		mapfile -t missing < <(pacman -T "${needed[@]}" || true)
+		if (( ${#missing[@]} )); then
+			pacman -S --noconfirm --needed --asdeps "${missing[@]}"
+		fi
+	fi
+	build_pkg "$pkgdir_tmp/aur-$pkg" --nodeps
+	# Install it on the host so later AUR builds can use it at build time.
 	built=$(compgen -G "$localrepo/$pkg-[0-9]*.pkg.tar.zst" || true)
-	[[ -n "$built" ]] && pacman -U --noconfirm --needed --asdeps $built
+	if [[ -n "$built" ]]; then
+		pacman -Udd --noconfirm --needed --asdeps $built
+	fi
 done < <(cat "${aur_lists[@]}")
 
 repo-add "$localrepo/lumen.db.tar.gz" "$localrepo"/*.pkg.tar.zst
