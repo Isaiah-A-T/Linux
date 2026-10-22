@@ -2,9 +2,9 @@
 
 import { get } from "../api.js";
 import { h, icon, SOURCE_LABEL } from "../dom.js";
-import { focus, focusFirst } from "../focus.js";
+import { focus, focusFirst, onFocus } from "../focus.js";
 import { install, jobFor, launch, openDetails } from "../details.js";
-import { setHero, subscribe } from "../state.js";
+import { setGameHero, subscribe } from "../state.js";
 import { openAccountSheet } from "./accounts.js";
 
 const TABS = [
@@ -122,9 +122,13 @@ export function render(ctx, params = {}) {
     }
   });
 
+  const offFocus = onFocus((f) => {
+    if (el.contains(f)) setGameHero(f._item || null);
+  });
+
   paintTabs();
   load().then(() => { focusFirstIn(body); ctx.ready(); });
-  setHero(null);
+  setGameHero(null);
 
   return {
     el,
@@ -135,7 +139,7 @@ export function render(ctx, params = {}) {
       if (action === "options" && f?._item) { openDetails(f._item, { onChange: load }); return true; }
       return false;
     },
-    destroy: unsub,
+    destroy() { unsub(); offFocus(); },
   };
 }
 

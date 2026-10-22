@@ -9,7 +9,7 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import __version__, apps, fun, jobs, library, mock, store, system, users
+from . import __version__, apps, art, fun, jobs, library, mock, store, system, users
 from .util import ApiError, mock_enabled
 
 
@@ -139,6 +139,11 @@ class Handler(BaseHTTPRequestHandler):
             if method == "GET" and path.startswith("/api/mock-art/"):
                 key = urllib.parse.unquote(path[len("/api/mock-art/"):]).removesuffix(".svg")
                 return self._bytes(mock.art_svg(key, query.get("shape", "cover")).encode(), "image/svg+xml")
+            if method == "GET" and path == "/api/art":
+                return self._art(urllib.parse.parse_qs(url.query))
+            if method == "GET" and path == "/api/placeholder-art":
+                svg = mock.art_svg(query.get("key", ""), query.get("shape", "cover"), query.get("title"))
+                return self._bytes(svg.encode(), "image/svg+xml", cache=True)
             if method == "GET" and path == "/api/icon":
                 return self._file(query.get("path", ""), allowed=apps.icon_roots())
             if method == "GET" and path == "/api/shot":
@@ -166,13 +171,25 @@ class Handler(BaseHTTPRequestHandler):
     def _json(self, value, status=200):
         self._bytes(json.dumps(value, default=list).encode(), "application/json", status)
 
-    def _bytes(self, data, ctype, status=200):
+    def _bytes(self, data, ctype, status=200, cache=False):
         self.send_response(status)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", "max-age=86400" if cache else "no-store")
         self.end_headers()
         self.wfile.write(data)
+
+    def _art(self, params):
+        got = art.first_image(params.get("u", []))
+        if got:
+            return self._bytes(got[0], got[1], cache=True)
+        fallback = params.get("f", [""])[-1]
+        if not fallback.startswith("/api/placeholder-art?"):
+            raise ApiError("Not found", 404)
+        self.send_response(302)
+        self.send_header("Location", fallback)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def _file(self, path, allowed=None):
         p = Path(path)
