@@ -1,0 +1,26 @@
+# The PS5 image's base system, installed by ps5/build.sh together with
+# iso/packages.x86_64, installer/packages.x86_64 (minus the bootloader
+# tools) and the packages built for the ISO. The kernel is linux-ps5 from
+# the ps5-linux project, installed separately.
+
+base
+linux-firmware
+mkinitcpio
+sudo
+nano
+less
+man-db
+
+# Disk tools for the first-boot resize and USB drives
+e2fsprogs
+dosfstools
+gptfdisk
+parted
+
+# Hardware
+pciutils
+usbutils
+iw
+wireless-regdb
+sof-firmware
+alsa-utils

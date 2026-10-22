@@ -1,0 +1,16 @@
+#!/bin/sh
+# Last exec step of setup on the PS5 image (shellprocess@lumen-ps5-done,
+# on the running system). From now on the console starts at the sign-in
+# screen; lumen-finish-setup.service removes the temporary account.
+set -eu
+cat > /etc/greetd/config.toml <<'GREETD'
+[terminal]
+vt = 1
+
+[default_session]
+command = "lumen-greeter"
+user = "greeter"
+GREETD
+mkdir -p /var/lib/lumen
+touch /var/lib/lumen/finish-setup
+rm -f /var/lib/lumen/setup-pending

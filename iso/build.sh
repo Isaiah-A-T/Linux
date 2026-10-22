@@ -86,6 +86,12 @@ done < <(cat "${aur_lists[@]}")
 
 repo-add "$localrepo/lumen.db.tar.gz" "$localrepo"/*.pkg.tar.zst
 
+# ps5/build.sh only needs the local repo; it builds a disk image instead.
+if [[ -n "${LUMEN_REPO_ONLY:-}" ]]; then
+	echo "Local repo written to $localrepo"
+	exit 0
+fi
+
 # --- Profile --------------------------------------------------------------
 # pacman.conf: enable multilib (Steam, 32-bit Vulkan) and the local repo.
 grep -q '^\[multilib\]' "$profile/pacman.conf" ||

@@ -1,0 +1,99 @@
+name: Build PS5 image
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths: ["ps5/**", "iso/**", "session/**", "shell/**", "installer/**", "Makefile",
+            ".github/workflows/build-ps5.yml", ".github/ci/build-ps5.sh"]
+  pull_request:
+    paths: ["ps5/**", "iso/**", "session/**", "shell/**", "installer/**", "Makefile",
+            ".github/workflows/build-ps5.yml", ".github/ci/build-ps5.sh"]
+
+concurrency:
+  group: build-ps5-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # ps5-linux-image commit whose build_image.sh builds the PS5 kernel
+  # (it pins the ps5-linux-patches tag). Bump to pick up kernel fixes.
+  PS5_LINUX_IMAGE_REF: 387e311fbc72ad784cb5dcb44c00381926743548
+
+jobs:
+  # The ps5-linux kernel as a pacman package (linux-ps5-*.pkg.tar.zst).
+  # Compiling it takes a while, so it is cached per PS5_LINUX_IMAGE_REF.
+  kernel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/cache@v4
+        id: cache
+        with:
+          path: linux-ps5
+          key: linux-ps5-${{ env.PS5_LINUX_IMAGE_REF }}
+
+      - name: Free disk space
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache /usr/local/share/boost
+          sudo docker image prune --all --force
+          df -h /
+
+      - name: Build the kernel package
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/ps5-linux/ps5-linux-image.git
+          cd ps5-linux-image
+          git checkout "$PS5_LINUX_IMAGE_REF"
+          ./build_image.sh --kernel-only --distro arch
+          mkdir -p ../linux-ps5
+          cp linux-bin/linux-ps5-*.pkg.tar.zst ../linux-ps5/
+          ls -lh ../linux-ps5
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-ps5
+          path: linux-ps5/*.pkg.tar.zst
+          compression-level: 0
+          retention-days: 14
+
+  image:
+    needs: kernel
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache /usr/local/share/boost
+          sudo docker image prune --all --force
+          df -h /
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-ps5
+          path: kernel
+
+      - name: Build in an Arch Linux container
+        run: |
+          docker run --rm --privileged \
+            -v "$GITHUB_WORKSPACE:/src" \
+            archlinux:latest bash /src/.github/ci/build-ps5.sh /src /src/kernel
+
+      - name: Checksum
+        run: |
+          cd out
+          sudo chown -R "$USER" .
+          sha256sum lumen-ps5.img.xz | tee SHA256SUMS
+          ls -lh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lumen-ps5
+          path: |
+            out/lumen-ps5.img.xz
+            out/SHA256SUMS
+          compression-level: 0
+          retention-days: 14
