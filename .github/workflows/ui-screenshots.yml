@@ -27,8 +27,9 @@ jobs:
       # Mock data, but the game art is fetched from Steam for real.
       - name: Take screenshots
         run: |
-          export XDG_DATA_HOME=$RUNNER_TEMP/data XDG_CACHE_HOME=$RUNNER_TEMP/cache
-          LUMEN_MOCK=1 PYTHONPATH=shell python3 -m lumend --ui shell/ui > $RUNNER_TEMP/lumend.log 2>&1 &
+          # A clean data and cache dir for lumend only (Playwright keeps its browser in ~/.cache).
+          XDG_DATA_HOME=$RUNNER_TEMP/data XDG_CACHE_HOME=$RUNNER_TEMP/cache \
+            LUMEN_MOCK=1 PYTHONPATH=shell python3 -m lumend --ui shell/ui > $RUNNER_TEMP/lumend.log 2>&1 &
           for _ in $(seq 30); do curl -sf http://127.0.0.1:7777/api/ping && break; sleep 1; done
           mkdir -p ui-screenshots
           NODE_PATH=/tmp/pw/node_modules node .github/ci/ui-screenshots.js ui-screenshots
