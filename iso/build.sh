@@ -65,10 +65,10 @@ while read -r pkg; do
 	fi
 	[[ -d "$pkgdir_tmp/aur-$pkg" ]] && continue
 	sudo -u "$builder" git clone --depth 1 "https://aur.archlinux.org/$pkg.git" "$pkgdir_tmp/aur-$pkg"
-	# Only build-time dependencies go on the build host; runtime ones (for
-	# umu-launcher that is most of Steam's runtime) are resolved when the ISO's
-	# root filesystem is installed.
-	mapfile -t needed < <(sed -n -E 's/^\s*(makedepends|checkdepends) = //p' \
+	# Install what the build needs ourselves, from the repos or from AUR
+	# packages built above, then build with --nodeps: makepkg -s can't see
+	# AUR packages we installed with -Udd.
+	mapfile -t needed < <(sed -n -E 's/^\s*(make|check)?depends(_x86_64)? = //p' \
 		"$pkgdir_tmp/aur-$pkg/.SRCINFO")
 	if (( ${#needed[@]} )); then
 		mapfile -t missing < <(pacman -T "${needed[@]}" || true)
@@ -77,7 +77,7 @@ while read -r pkg; do
 		fi
 	fi
 	build_pkg "$pkgdir_tmp/aur-$pkg" --nodeps
-	# Install it on the host so later AUR builds can use it at build time.
+	# Install it on the host so later AUR builds can depend on it.
 	built=$(compgen -G "$localrepo/$pkg-[0-9]*.pkg.tar.zst" || true)
 	if [[ -n "$built" ]]; then
 		pacman -Udd --noconfirm --needed --asdeps $built
