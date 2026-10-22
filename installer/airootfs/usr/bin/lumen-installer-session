@@ -1,0 +1,43 @@
+#!/bin/bash
+# Live ISO entry point. lumen-session runs this inside gamescope instead
+# of the shell when the console boots from the USB drive: the power-on
+# screen asks what to do, then either runs setup or hands over to the
+# normal Lumen shell.
+set -u
+
+share=/usr/share/lumen-installer
+log=/tmp/lumen-installer/session.log
+mkdir -p /tmp/lumen-installer
+exec >>"$log" 2>&1
+
+# Controller -> keyboard/mouse, so Calamares' widget pages work with a pad.
+sudo -n /usr/bin/lumen-padmap &
+padmap=$!
+trap 'sudo -n kill "$padmap" 2>/dev/null' EXIT
+
+qml=$(command -v qml6 || echo /usr/lib/qt6/bin/qml)
+
+while true; do
+	QT_QPA_PLATFORM=xcb "$qml" "$share/start.qml"
+	case $? in
+	0)
+		# Set up Lumen OS. If setup is cancelled, come back here.
+		/usr/bin/lumen-installer --no-padmap
+		;;
+	10)
+		sudo -n kill "$padmap" 2>/dev/null
+		trap - EXIT
+		# Already inside gamescope with lumend running (lumen-session
+		# started both), so start the shell itself.
+		exec lumen-ui
+		;;
+	20)
+		systemctl poweroff
+		exit 0
+		;;
+	*)
+		# The power-on screen crashed; don't strand the player.
+		sleep 1
+		;;
+	esac
+done

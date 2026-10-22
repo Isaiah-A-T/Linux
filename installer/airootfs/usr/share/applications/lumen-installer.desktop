@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Install Lumen OS
+Comment=Set up Lumen OS on this console
+Exec=lumen-installer
+Icon=/etc/calamares/branding/lumen/images/logo.svg
+Terminal=false
+Categories=System;
+NoDisplay=true

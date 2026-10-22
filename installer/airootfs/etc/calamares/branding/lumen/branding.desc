@@ -1,0 +1,49 @@
+# Lumen OS branding for Calamares.
+#
+# The whole window is fullscreen with a QML status bar on top and a QML
+# button bar at the bottom. Every step except disk partitioning is a QML
+# page in this directory (found via qmlSearch: both in each module's
+# config); the partition page is a Qt widget page styled by
+# stylesheet.qss. Colours here only reach the widget parts of Calamares;
+# the QML parts read components/Theme.qml.
+---
+componentName:  lumen
+
+welcomeStyleCalamares:   false
+welcomeExpandingLogo:    true
+
+windowExpanding:    fullscreen
+windowSize:         1280px,800px
+windowPlacement:    center
+
+sidebar:    qml,top
+navigation: qml,bottom
+
+strings:
+    productName:         "Lumen OS"
+    shortProductName:    "Lumen"
+    version:             "rolling"
+    shortVersion:        "rolling"
+    versionedName:       "Lumen OS"
+    shortVersionedName:  "Lumen OS"
+    bootloaderEntryName: "Lumen"
+    productUrl:          "https://github.com/Isaiah-A-T/Linux"
+    supportUrl:          "https://github.com/Isaiah-A-T/Linux/issues"
+    knownIssuesUrl:      "https://github.com/Isaiah-A-T/Linux/issues"
+    releaseNotesUrl:     ""
+    donateUrl:           ""
+
+images:
+    productLogo:         "images/logo.svg"
+    productIcon:         "images/logo.svg"
+    productWelcome:      "images/logo.svg"
+    productWallpaper:    "images/wallpaper.svg"
+
+style:
+   SidebarBackground:        "#07090d"
+   SidebarText:              "#9aa6b5"
+   SidebarTextCurrent:       "#04140d"
+   SidebarBackgroundCurrent: "#3ee6a0"
+
+slideshow:    "show.qml"
+slideshowAPI: 2

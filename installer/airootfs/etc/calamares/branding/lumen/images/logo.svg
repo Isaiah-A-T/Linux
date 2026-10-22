@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 112 112">
+  <!-- The shell's boot mark: accent and white quarter arcs around a glowing core. -->
+  <defs>
+    <radialGradient id="glow">
+      <stop offset="0.35" stop-color="#3ee6a0" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#3ee6a0" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <path d="M 93.4 18.6 A 53.2 53.2 0 0 1 93.4 93.4" fill="none" stroke="#3ee6a0" stroke-width="5.6" stroke-linecap="butt"/>
+  <path d="M 30.3 81.7 A 36.4 36.4 0 0 1 30.3 30.3" fill="none" stroke="#ffffff" stroke-width="5.6"/>
+  <circle cx="56" cy="56" r="32" fill="url(#glow)"/>
+  <circle cx="56" cy="56" r="14.4" fill="#3ee6a0"/>
+</svg>
