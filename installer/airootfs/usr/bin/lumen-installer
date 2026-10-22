@@ -1,0 +1,27 @@
+#!/bin/bash
+# Start Lumen OS Setup (Calamares) fullscreen as root. Used by the
+# power-on screen and by the shell's "Install Lumen OS" dock button.
+set -u
+
+mkdir -p /tmp/lumen-installer
+
+if [[ "${1:-}" != "--no-padmap" ]] && ! pgrep -x lumen-padmap >/dev/null; then
+	sudo -n /usr/bin/lumen-padmap &
+	padmap=$!
+	trap 'sudo -n kill "$padmap" 2>/dev/null' EXIT
+fi
+
+# Calamares needs root for partitioning. The live user has passwordless
+# sudo, so pass the display through explicitly rather than relying on
+# sudo's environment policy. gamescope only offers Xwayland to clients,
+# hence xcb.
+sudo -n env \
+	DISPLAY="${DISPLAY:-:0}" \
+	XAUTHORITY="${XAUTHORITY:-$HOME/.Xauthority}" \
+	XDG_RUNTIME_DIR=/tmp/lumen-installer/runtime-root \
+	QT_QPA_PLATFORM=xcb \
+	QT_QUICK_CONTROLS_STYLE=Basic \
+	QT_FONT_DPI="${QT_FONT_DPI:-96}" \
+	QML_XHR_ALLOW_FILE_READ=1 \
+	QML_XHR_ALLOW_FILE_WRITE=1 \
+	sh -c 'mkdir -p -m 700 "$XDG_RUNTIME_DIR"; exec calamares -style Fusion'

@@ -1,0 +1,7 @@
+# Executables in installer/airootfs. archiso copies files as 0644, so
+# iso/build.sh adds these to profiledef.sh's file_permissions.
+/usr/bin/lumen-installer 0:0:755
+/usr/bin/lumen-installer-session 0:0:755
+/usr/bin/lumen-padmap 0:0:755
+/usr/share/lumen-installer/target-setup 0:0:755
+/usr/share/lumen-installer/apply-avatar 0:0:755

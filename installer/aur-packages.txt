@@ -1,0 +1,4 @@
+# Built from the AUR by iso/build.sh, in this order. ckbcomp is a
+# build and runtime dependency of calamares.
+ckbcomp
+calamares

@@ -1,0 +1,125 @@
+/*
+ * Lumen OS widget styling. Only the disk-partitioning page and the
+ * install-progress page are Qt widgets; everything else is QML.
+ * Colours mirror components/Theme.qml.
+ */
+
+QWidget {
+    background-color: #04060c;
+    color: #eef2ff;
+    font-family: "Inter";
+    font-size: 16px;
+    selection-background-color: #13a872;
+    selection-color: #eef2ff;
+}
+
+QLabel { background: transparent; }
+
+/* Buttons: pill shaped, accent ring on keyboard/controller focus */
+QPushButton, QToolButton {
+    background-color: #101626;
+    border: 1px solid #262d3e;
+    border-radius: 22px;
+    padding: 10px 22px;
+    min-height: 24px;
+}
+QPushButton:hover, QToolButton:hover { background-color: #1a2134; }
+QPushButton:focus, QToolButton:focus { border: 3px solid #3ee6a0; background-color: #1a2134; }
+QPushButton:pressed { background-color: #3ee6a0; color: #04110b; }
+QPushButton:disabled { color: #5f6884; border-color: #101626; }
+
+/* The big "Erase disk / Install alongside / Manual" choices */
+QRadioButton, QCheckBox {
+    background: transparent;
+    spacing: 14px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    font-size: 18px;
+}
+QRadioButton:hover, QCheckBox:hover { background-color: #101626; }
+QRadioButton:focus, QCheckBox:focus { background-color: #1a2134; border: 3px solid #3ee6a0; }
+QRadioButton::indicator, QCheckBox::indicator {
+    width: 22px; height: 22px;
+    border: 2px solid #262d3e;
+    background-color: #04060c;
+}
+QRadioButton::indicator { border-radius: 13px; }
+QCheckBox::indicator { border-radius: 6px; }
+QRadioButton::indicator:checked, QCheckBox::indicator:checked {
+    background-color: #3ee6a0;
+    border-color: #3ee6a0;
+}
+
+/* Drop-downs (disk picker, filesystem, swap) */
+QComboBox {
+    background-color: #101626;
+    border: 1px solid #262d3e;
+    border-radius: 12px;
+    padding: 10px 16px;
+    min-height: 26px;
+}
+QComboBox:focus { border: 3px solid #3ee6a0; }
+QComboBox::drop-down { border: none; width: 34px; }
+QComboBox QAbstractItemView {
+    background-color: #101626;
+    border: 1px solid #262d3e;
+    selection-background-color: #3ee6a0;
+    selection-color: #04110b;
+    outline: 0;
+    padding: 6px;
+}
+
+QLineEdit, QSpinBox {
+    background-color: #101626;
+    border: 1px solid #262d3e;
+    border-radius: 12px;
+    padding: 10px 14px;
+}
+QLineEdit:focus, QSpinBox:focus { border: 3px solid #3ee6a0; }
+
+/* Manual partitioning table */
+QTreeView, QListView, QTableView {
+    background-color: #0a0e18;
+    alternate-background-color: #0e1320;
+    border: 1px solid #262d3e;
+    border-radius: 12px;
+    outline: 0;
+}
+QTreeView::item, QListView::item { padding: 8px; }
+QTreeView::item:selected, QListView::item:selected { background-color: #13a872; color: #eef2ff; }
+QHeaderView::section {
+    background-color: #101626;
+    color: #98a2bd;
+    border: none;
+    padding: 8px;
+}
+
+QScrollBar:vertical { background: transparent; width: 10px; margin: 4px; }
+QScrollBar::handle:vertical { background: #262d3e; border-radius: 4px; min-height: 40px; }
+QScrollBar::add-line, QScrollBar::sub-line { height: 0; }
+
+QDialog, QMessageBox { background-color: #101626; border: 1px solid #262d3e; }
+
+#partitionBarView, #partitionLabel { background: transparent; }
+
+/* Install progress page */
+#slideshow { background-color: #04060c; }
+#exec-progress {
+    background-color: #101626;
+    border: none;
+    border-radius: 6px;
+    min-height: 12px;
+    max-height: 12px;
+    margin: 0 72px;
+    text-align: center;
+    color: transparent;
+}
+#exec-progress::chunk {
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #13a872, stop:1 #3ee6a0);
+    border-radius: 6px;
+}
+#exec-message {
+    color: #98a2bd;
+    font-size: 15px;
+    padding: 10px 72px 24px 72px;
+}

@@ -1,0 +1,273 @@
+#!/usr/bin/env python3
+"""Turn game controllers into a keyboard and mouse for the live installer.
+
+Calamares only understands keyboard and mouse, and its disk page is made
+of plain Qt widgets, so the installer runs this helper (as root, for
+/dev/uinput) while it is open. Every pad is grabbed and re-sent as:
+
+    A           Return          B            Escape
+    X           BackSpace       Y            Space
+    Menu        F10 (next)      View         F9 (back)
+    LB / RB     Shift+Tab / Tab LT / RT      PageUp / PageDown
+    D-pad, left stick           arrow keys (with key repeat)
+    Right stick                 mouse pointer
+    R3                          left click
+
+The QML pages treat F10/F9 as next/back and Escape as back or "close the
+keyboard", so the pad matches the hints drawn on screen.
+"""
+
+import asyncio
+import signal
+import sys
+import time
+
+try:
+    import evdev
+    from evdev import AbsInfo, InputDevice, UInput, ecodes as e
+except ImportError:
+    sys.exit("lumen-padmap: python-evdev is not installed")
+
+BUTTONS = {
+    e.BTN_SOUTH: [e.KEY_ENTER],
+    e.BTN_EAST: [e.KEY_ESC],
+    e.BTN_WEST: [e.KEY_BACKSPACE],   # BTN_X on most drivers
+    e.BTN_NORTH: [e.KEY_SPACE],      # BTN_Y
+    e.BTN_START: [e.KEY_F10],
+    e.BTN_SELECT: [e.KEY_F9],
+    e.BTN_TL: [e.KEY_LEFTSHIFT, e.KEY_TAB],
+    e.BTN_TR: [e.KEY_TAB],
+    e.BTN_TL2: [e.KEY_PAGEUP],
+    e.BTN_TR2: [e.KEY_PAGEDOWN],
+    e.BTN_DPAD_UP: [e.KEY_UP],
+    e.BTN_DPAD_DOWN: [e.KEY_DOWN],
+    e.BTN_DPAD_LEFT: [e.KEY_LEFT],
+    e.BTN_DPAD_RIGHT: [e.KEY_RIGHT],
+}
+CLICK_BUTTONS = {e.BTN_THUMBR: e.BTN_LEFT}
+
+# Analog triggers on pads that report them as axes.
+TRIGGER_AXES = {e.ABS_Z: e.KEY_PAGEUP, e.ABS_RZ: e.KEY_PAGEDOWN}
+
+REPEAT_DELAY = 0.40
+REPEAT_RATE = 0.09
+STICK_ON = 0.55       # fraction of full deflection that counts as a press
+STICK_OFF = 0.35
+MOUSE_DEADZONE = 0.12
+MOUSE_SPEED = 28.0    # pixels per tick at full deflection
+TICK = 1 / 60
+
+ALL_KEYS = sorted({k for ks in BUTTONS.values() for k in ks}
+                  | set(TRIGGER_AXES.values())
+                  | {e.KEY_UP, e.KEY_DOWN, e.KEY_LEFT, e.KEY_RIGHT})
+
+
+def is_pad(dev):
+    caps = dev.capabilities()
+    keys = caps.get(e.EV_KEY, [])
+    return e.BTN_SOUTH in keys or e.BTN_GAMEPAD in keys
+
+
+def norm(info, value):
+    """Map a raw axis value to -1..1 around the axis centre."""
+    lo, hi = info.min, info.max
+    if hi == lo:
+        return 0.0
+    mid = (lo + hi) / 2
+    return max(-1.0, min(1.0, (value - mid) / ((hi - lo) / 2)))
+
+
+class Keys:
+    """Virtual keyboard with our own auto-repeat for held directions."""
+
+    def __init__(self, ui):
+        self.ui = ui
+        self.held = {}     # key -> next repeat time
+        self.count = {}    # key -> number of sources holding it
+
+    def press(self, codes):
+        for c in codes:
+            n = self.count.get(c, 0)
+            self.count[c] = n + 1
+            if n == 0:
+                self.ui.write(e.EV_KEY, c, 1)
+                if c in (e.KEY_UP, e.KEY_DOWN, e.KEY_LEFT, e.KEY_RIGHT,
+                         e.KEY_BACKSPACE, e.KEY_PAGEUP, e.KEY_PAGEDOWN):
+                    self.held[c] = time.monotonic() + REPEAT_DELAY
+        self.ui.syn()
+
+    def release(self, codes):
+        for c in reversed(codes):
+            n = self.count.get(c, 0)
+            if n <= 0:
+                continue
+            self.count[c] = n - 1
+            if n == 1:
+                self.ui.write(e.EV_KEY, c, 0)
+                self.held.pop(c, None)
+        self.ui.syn()
+
+    def tick(self):
+        now = time.monotonic()
+        for c, due in list(self.held.items()):
+            if now >= due:
+                self.ui.write(e.EV_KEY, c, 2)
+                self.held[c] = now + REPEAT_RATE
+        self.ui.syn()
+
+
+class Pad:
+    def __init__(self, dev, keys, mouse):
+        self.dev = dev
+        self.keys = keys
+        self.mouse = mouse
+        self.absinfo = dict(dev.capabilities(absinfo=True).get(e.EV_ABS, []))
+        self.axis = {}
+        self.dirs = {}      # (axis, sign) -> pressed key
+        self.trig = {}
+
+    def value(self, code):
+        info = self.absinfo.get(code)
+        if info is None:
+            return 0.0
+        return norm(info, self.axis.get(code, (info.min + info.max) / 2))
+
+    def direction(self, code, value, neg, pos):
+        """Hat and left stick: act like a d-pad with hysteresis."""
+        for sign, key in ((-1, neg), (1, pos)):
+            on = (sign * value) > (STICK_ON if (code, sign) not in self.dirs else STICK_OFF)
+            if on and (code, sign) not in self.dirs:
+                self.dirs[(code, sign)] = key
+                self.keys.press([key])
+            elif not on and (code, sign) in self.dirs:
+                self.keys.release([self.dirs.pop((code, sign))])
+
+    def handle(self, ev):
+        if ev.type == e.EV_KEY:
+            if ev.code in BUTTONS:
+                if ev.value == 1:
+                    self.keys.press(BUTTONS[ev.code])
+                elif ev.value == 0:
+                    self.keys.release(BUTTONS[ev.code])
+            elif ev.code in CLICK_BUTTONS and ev.value in (0, 1):
+                self.mouse.write(e.EV_KEY, CLICK_BUTTONS[ev.code], ev.value)
+                self.mouse.syn()
+        elif ev.type == e.EV_ABS:
+            self.axis[ev.code] = ev.value
+            if ev.code in (e.ABS_HAT0X, e.ABS_HAT0Y):
+                # Hats report -1/0/1 directly.
+                neg, pos = ((e.KEY_LEFT, e.KEY_RIGHT) if ev.code == e.ABS_HAT0X
+                            else (e.KEY_UP, e.KEY_DOWN))
+                self.direction(ev.code, float(ev.value), neg, pos)
+            elif ev.code == e.ABS_X:
+                self.direction(ev.code, self.value(e.ABS_X), e.KEY_LEFT, e.KEY_RIGHT)
+            elif ev.code == e.ABS_Y:
+                self.direction(ev.code, self.value(e.ABS_Y), e.KEY_UP, e.KEY_DOWN)
+            elif ev.code in TRIGGER_AXES:
+                info = self.absinfo[ev.code]
+                pulled = (ev.value - info.min) / max(1, info.max - info.min) > 0.6
+                if pulled != self.trig.get(ev.code, False):
+                    self.trig[ev.code] = pulled
+                    (self.keys.press if pulled else self.keys.release)([TRIGGER_AXES[ev.code]])
+
+    def release_all(self):
+        for key in self.dirs.values():
+            self.keys.release([key])
+        self.dirs.clear()
+        for code, pulled in self.trig.items():
+            if pulled:
+                self.keys.release([TRIGGER_AXES[code]])
+        self.trig.clear()
+
+    def mouse_step(self):
+        dx, dy = self.value(e.ABS_RX), self.value(e.ABS_RY)
+        mag = (dx * dx + dy * dy) ** 0.5
+        if mag < MOUSE_DEADZONE:
+            return 0, 0
+        # Ease in so small deflections allow precise pointing.
+        k = ((mag - MOUSE_DEADZONE) / (1 - MOUSE_DEADZONE)) ** 2 * MOUSE_SPEED / mag
+        return dx * k, dy * k
+
+
+class Mapper:
+    def __init__(self):
+        self.keys = Keys(UInput({e.EV_KEY: ALL_KEYS}, name="Lumen pad keyboard"))
+        self.mouse = UInput({e.EV_KEY: [e.BTN_LEFT, e.BTN_RIGHT],
+                             e.EV_REL: [e.REL_X, e.REL_Y]}, name="Lumen pad mouse")
+        self.pads = {}
+        self.frac = [0.0, 0.0]
+
+    async def watch(self, path):
+        try:
+            dev = InputDevice(path)
+            if not is_pad(dev) or dev.name.startswith("Lumen pad"):
+                dev.close()
+                return
+            dev.grab()
+        except OSError:
+            return
+        pad = Pad(dev, self.keys, self.mouse)
+        self.pads[path] = pad
+        print(f"lumen-padmap: using {dev.name} ({path})", flush=True)
+        try:
+            async for ev in dev.async_read_loop():
+                pad.handle(ev)
+        except OSError:
+            pass  # unplugged
+        finally:
+            pad.release_all()
+            self.pads.pop(path, None)
+            try:
+                dev.close()
+            except OSError:
+                pass
+
+    async def hotplug(self):
+        while True:
+            for path in evdev.list_devices():
+                if path not in self.pads:
+                    asyncio.ensure_future(self.watch(path))
+            await asyncio.sleep(2)
+
+    async def ticker(self):
+        while True:
+            self.keys.tick()
+            mx = my = 0.0
+            for pad in list(self.pads.values()):
+                dx, dy = pad.mouse_step()
+                mx += dx
+                my += dy
+            if mx or my:
+                self.frac[0] += mx
+                self.frac[1] += my
+                ix, iy = int(self.frac[0]), int(self.frac[1])
+                self.frac[0] -= ix
+                self.frac[1] -= iy
+                if ix:
+                    self.mouse.write(e.EV_REL, e.REL_X, ix)
+                if iy:
+                    self.mouse.write(e.EV_REL, e.REL_Y, iy)
+                self.mouse.syn()
+            await asyncio.sleep(TICK)
+
+
+def main():
+    mapper = Mapper()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        loop.add_signal_handler(sig, loop.stop)
+    loop.create_task(mapper.hotplug())
+    loop.create_task(mapper.ticker())
+    try:
+        loop.run_forever()
+    finally:
+        # Pads are ungrabbed when their file descriptors close.
+        for pad in list(mapper.pads.values()):
+            pad.release_all()
+        mapper.keys.ui.close()
+        mapper.mouse.close()
+
+
+if __name__ == "__main__":
+    main()

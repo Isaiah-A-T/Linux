@@ -1,0 +1,22 @@
+#!/bin/sh
+# Copy the avatar picked on the profile page into the new system, where
+# the sign-in screen (lumend) and other apps look for it:
+#   /var/lib/AccountsService/icons/<user>   and   ~/.face
+# Runs on the live side: apply-avatar <target root> <username>.
+set -u
+root=$1
+user=$2
+choice=$(cat /tmp/lumen-installer/avatar 2>/dev/null | tr -cd 'a-z0-9_-')
+# No choice means the default: the name's initial on a colour.
+[ -n "$choice" ] || exit 0
+
+src=/etc/calamares/branding/lumen/images/avatars/$choice.png
+[ -f "$src" ] || { echo "apply-avatar: no picture $src"; exit 0; }
+
+install -Dm644 "$src" "$root/var/lib/AccountsService/icons/$user"
+home=$(chroot "$root" getent passwd "$user" | cut -d: -f6)
+if [ -n "$home" ] && [ -d "$root$home" ]; then
+	install -m644 "$src" "$root$home/.face"
+	chroot "$root" chown "$user:" "$home/.face"
+fi
+exit 0

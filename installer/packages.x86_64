@@ -1,0 +1,26 @@
+# Live ISO packages for Lumen OS Setup, added by iso/build.sh on top of
+# the distro's own list. Calamares itself comes from aur-packages.txt.
+
+# Power-on screen and the installer's QML pages
+qt6-declarative
+qt6-svg
+inter-font
+
+# Controller support while the installer runs (lumen-padmap)
+python-evdev
+
+# Partitioning and file systems Calamares can create
+kpmcore
+dosfstools
+mtools
+btrfs-progs
+xfsprogs
+e2fsprogs
+cryptsetup
+gptfdisk
+
+# Copying the system and making it bootable
+rsync
+grub
+efibootmgr
+os-prober

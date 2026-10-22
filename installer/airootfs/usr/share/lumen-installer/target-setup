@@ -1,0 +1,88 @@
+#!/bin/bash
+# Runs inside the new system (Calamares shellprocess@lumen-target, in the
+# target chroot) right after the live image has been copied over. Turns
+# the live ISO's root into an ordinary installed Lumen OS: no live
+# account or autologin, a normal initramfs and kernel, and no installer.
+set -u
+
+log() { echo "lumen target-setup: $*"; }
+
+# --- Kernel and initramfs ----------------------------------------------
+# mkarchiso empties /boot in the live image, so put the kernel back from
+# its package copy. The initcpio step after this builds the initramfs.
+kver=$(ls -1 /usr/lib/modules | sort -V | tail -n1)
+if [[ -n "$kver" && -f "/usr/lib/modules/$kver/vmlinuz" ]]; then
+	install -Dm644 "/usr/lib/modules/$kver/vmlinuz" /boot/vmlinuz-linux
+	log "kernel $kver"
+fi
+rm -f /etc/mkinitcpio.conf.d/archiso.conf
+cat > /etc/mkinitcpio.d/linux.preset <<'PRESET'
+# mkinitcpio preset file for the 'linux' package
+ALL_kver="/boot/vmlinuz-linux"
+PRESETS=('default' 'fallback')
+default_image="/boot/initramfs-linux.img"
+fallback_image="/boot/initramfs-linux-fallback.img"
+fallback_options="-S autodetect"
+PRESET
+
+# --- Live-only services and files --------------------------------------
+live_units=(
+	lumen-live-setup.service
+	pacman-init.service
+	choose-mirror.service
+	etc-pacman.d-gnupg.mount
+	livecd-alsa-unmuter.service
+	livecd-talk.service
+)
+for u in "${live_units[@]}"; do
+	systemctl disable "$u" >/dev/null 2>&1
+	rm -f "/etc/systemd/system/$u"
+	find /etc/systemd/system -name "$u" -type l -delete 2>/dev/null
+done
+rm -f \
+	/usr/local/bin/lumen-live-setup \
+	/etc/sudoers.d/10-live \
+	/root/.automated_script.sh \
+	/root/.zlogin \
+	/etc/motd \
+	/etc/systemd/journald.conf.d/volatile-storage.conf \
+	/etc/systemd/logind.conf.d/do-not-suspend.conf \
+	/etc/ssh/sshd_config.d/10-archiso.conf \
+	/etc/systemd/system-generators/systemd-gpt-auto-generator
+rm -rf /etc/systemd/system/getty@tty1.service.d
+
+# The live image has an empty root password. The first profile gets
+# sudo through wheel (users step), so lock root.
+passwd -l root >/dev/null 2>&1
+
+# The live pacman keyring is set up at boot by pacman-init; set one up
+# for good here.
+if [[ ! -s /etc/pacman.d/gnupg/pubring.gpg && ! -s /etc/pacman.d/gnupg/pubring.kbx ]]; then
+	pacman-key --init >/dev/null 2>&1 && pacman-key --populate archlinux >/dev/null 2>&1 \
+		|| log "pacman keyring setup failed; run pacman-key --init later"
+fi
+
+# --- Sign-in ----------------------------------------------------------
+# The live greetd config logs straight into the live account. Installed
+# systems always start at the sign-in screen.
+cat > /etc/greetd/config.toml <<'GREETD'
+[terminal]
+vt = 1
+
+[default_session]
+command = "lumen-greeter"
+user = "greeter"
+GREETD
+
+# --- Remove the installer ---------------------------------------------
+pacman -Rns --noconfirm calamares >/dev/null 2>&1 || log "calamares package not removed"
+rm -rf /etc/calamares
+rm -f \
+	/usr/bin/lumen-installer \
+	/usr/bin/lumen-installer-session \
+	/usr/bin/lumen-padmap \
+	/usr/share/applications/lumen-installer.desktop
+# Last, since this script lives here.
+rm -rf /usr/share/lumen-installer
+log "done"
+exit 0
