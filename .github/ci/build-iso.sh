@@ -8,9 +8,9 @@ src="${1:-/src}"
 pacman-key --init
 pacman-key --populate archlinux
 # Multilib for Steam's 32-bit dependencies while resolving makedepends.
-sed -i '/^#\[multilib\]/{s/^#//;n;s/^#//}' /etc/pacman.conf
+grep -q '^\[multilib\]' /etc/pacman.conf ||
+	printf '\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' >> /etc/pacman.conf
 pacman -Syu --noconfirm --needed archiso base-devel git sudo
-pacman -Sl multilib | wc -l
 
 # makepkg refuses root, so packages are built by "builder", which may install
 # build dependencies with sudo.

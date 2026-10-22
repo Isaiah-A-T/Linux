@@ -88,7 +88,8 @@ repo-add "$localrepo/lumen.db.tar.gz" "$localrepo"/*.pkg.tar.zst
 
 # --- Profile --------------------------------------------------------------
 # pacman.conf: enable multilib (Steam, 32-bit Vulkan) and the local repo.
-sed -i '/^#\[multilib\]/{s/^#//;n;s/^#//}' "$profile/pacman.conf"
+grep -q '^\[multilib\]' "$profile/pacman.conf" ||
+	printf '\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' >> "$profile/pacman.conf"
 printf '\n[lumen]\nSigLevel = Optional TrustAll\nServer = file://%s\n' "$localrepo" >> "$profile/pacman.conf"
 
 {
