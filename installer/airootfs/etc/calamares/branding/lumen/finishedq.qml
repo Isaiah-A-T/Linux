@@ -15,6 +15,20 @@ FocusScope {
     }
     function onLeave() {}
 
+    // On the PS5 USB image setup configures the running system instead of
+    // installing to a disk, and the USB drive has to stay in.
+    // ps5/build.sh writes the marker file.
+    property bool inPlace: false
+    Component.onCompleted: {
+        var xhr = new XMLHttpRequest();
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === XMLHttpRequest.DONE)
+                root.inPlace = xhr.responseText !== "";
+        };
+        xhr.open("GET", "file:///etc/lumen/setup-in-place");
+        xhr.send();
+    }
+
     Backdrop { anchors.fill: parent; originY: Theme.barHeight }
 
     Column {
@@ -46,7 +60,9 @@ FocusScope {
             textFormat: Text.StyledText
             text: config.failed
                   ? config.failureMessage
-                  : qsTr("%1 is installed. Remove the USB drive, then restart to sign in for the first time.")
+                  : (root.inPlace
+                     ? qsTr("Your profile is ready. Keep the USB drive plugged in: %1 runs from it.")
+                     : qsTr("%1 is installed. Remove the USB drive, then restart to sign in for the first time."))
                         .arg(Branding.string(Branding.ProductName))
             color: Theme.muted
             font.family: Theme.font
@@ -80,13 +96,14 @@ FocusScope {
                 id: restartButton
                 visible: !config.failed
                 primary: true
-                text: qsTr("Restart now")
+                text: root.inPlace ? qsTr("Go to sign-in") : qsTr("Restart now")
                 KeyNavigation.right: quitButton
                 onActivated: config.doRestart(true)
             }
             ConsoleButton {
                 id: quitButton
-                text: config.failed ? qsTr("Close setup") : qsTr("Keep using the live system")
+                text: config.failed ? qsTr("Close setup")
+                      : root.inPlace ? qsTr("Keep looking around") : qsTr("Keep using the live system")
                 KeyNavigation.left: restartButton
                 onActivated: ViewManager.quit()
             }

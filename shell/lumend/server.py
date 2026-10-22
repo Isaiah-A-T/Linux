@@ -14,7 +14,9 @@ from .util import ApiError, mock_enabled
 
 
 def is_live():
-    return os.path.isdir("/run/archiso") or os.environ.get("LUMEN_LIVE") == "1"
+    # The PS5 USB image counts as live until its first-boot setup has run.
+    return (os.path.isdir("/run/archiso") or os.path.exists("/var/lib/lumen/setup-pending")
+            or os.environ.get("LUMEN_LIVE") == "1")
 
 
 def _info(_q, _b):

@@ -6,6 +6,10 @@ export XDG_CURRENT_DESKTOP=Lumen
 export XDG_SESSION_TYPE=wayland
 export LUMEN_PORT="${LUMEN_PORT:-7777}"
 
+# Per-image settings, e.g. LUMEN_GAMESCOPE_ARGS on the PS5 image.
+# shellcheck disable=SC1091
+[ -r /etc/lumen/session.conf ] && . /etc/lumen/session.conf
+
 if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
 	systemctl --user import-environment XDG_CURRENT_DESKTOP XDG_SESSION_TYPE LUMEN_PORT
 	systemctl --user start lumend.service
@@ -28,10 +32,11 @@ fullscreen() {
 	exit 1
 }
 
-# On the live ISO, the first screen is the installer (first-start style).
-# It is provided by the installer package as lumen-installer-session.
+# On the live ISO, and on the PS5 USB image until setup has run, the first
+# screen is the installer (first-start style). It is provided by the
+# installer package as lumen-installer-session.
 # Booting with lumen.skip_installer goes straight to the shell.
-if [ -d /run/archiso ] && command -v lumen-installer-session >/dev/null 2>&1 &&
+if { [ -d /run/archiso ] || [ -e /var/lib/lumen/setup-pending ]; } && command -v lumen-installer-session >/dev/null 2>&1 &&
 	[ -z "${LUMEN_SKIP_INSTALLER:-}" ] && ! grep -qw lumen.skip_installer /proc/cmdline; then
 	fullscreen lumen-installer-session
 fi
