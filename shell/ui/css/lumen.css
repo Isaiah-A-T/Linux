@@ -208,6 +208,7 @@ svg.i { width: 1.5rem; height: 1.5rem; flex: none; stroke: currentColor; fill: n
 }
 .tile.focused .src { opacity: 1; }
 .tile.all { display: grid; place-items: center; text-align: center; background: var(--glass); backdrop-filter: blur(24px); }
+.tile.all > div { display: flex; flex-direction: column; align-items: center; }
 .tile.all .i { width: 3rem; height: 3rem; margin-bottom: 0.4rem; color: var(--accent); }
 .tile.all span { font-weight: 700; font-size: 1rem; }
 .tile .label { position: absolute; left: 0; right: 0; top: calc(100% + 0.7rem); font-size: 0.95rem; font-weight: 600;

@@ -22,9 +22,15 @@ def run(cmd, timeout=15, check=False, env=None, input=None):
     full_env = None
     if env:
         full_env = {**os.environ, **env}
-    proc = subprocess.run(
-        cmd, capture_output=True, text=True, timeout=timeout, env=full_env, input=input
-    )
+    try:
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout, env=full_env, input=input
+        )
+    except subprocess.TimeoutExpired:
+        # bluetoothctl waits forever when bluetoothd isn't running.
+        if check:
+            raise RuntimeError(f"{cmd[0]} timed out")
+        return ""
     if check and proc.returncode != 0:
         raise RuntimeError(proc.stderr.strip() or f"{cmd[0]} failed")
     return proc.stdout
