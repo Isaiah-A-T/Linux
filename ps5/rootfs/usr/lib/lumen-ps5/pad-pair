@@ -1,0 +1,44 @@
+#!/bin/bash
+# Pairs wireless controllers without a screen or keyboard: hold PS + Create
+# on a DualSense (or the pair button on an Xbox controller) until the light
+# flashes, and it connects. Runs from boot until a controller is connected,
+# for at most 15 minutes (lumen-pad-pair.service). Only devices whose name
+# looks like a game controller are paired.
+#
+# BlueZ pairs with "Just Works" when no agent is registered, which is what
+# these controllers use, so plain D-Bus calls via busctl are enough.
+set -u
+
+adapter=$(busctl tree --list org.bluez 2>/dev/null | grep -m1 -E '^/org/bluez/hci[0-9]+$')
+[[ -n "$adapter" ]] || { echo "pad-pair: no Bluetooth adapter"; exit 0; }
+
+bz() { busctl --timeout=30 "$@" 2>/dev/null; }
+prop() { bz get-property org.bluez "$1" org.bluez.Device1 "$2" | cut -d' ' -f2-; }
+
+bz set-property org.bluez "$adapter" org.bluez.Adapter1 Powered b true
+bz call org.bluez "$adapter" org.bluez.Adapter1 StartDiscovery
+
+controller_name='Wireless Controller|DualSense|DUALSHOCK|Xbox|Pro Controller|8BitDo|Gamepad'
+deadline=$(( $(date +%s) + 900 ))
+while (( $(date +%s) < deadline )); do
+	for dev in $(busctl tree --list org.bluez 2>/dev/null | grep -E "^$adapter/dev_[0-9A-F_]+$"); do
+		name=$(prop "$dev" Name)
+		[[ "$name" =~ $controller_name ]] || continue
+		if [[ "$(prop "$dev" Paired)" != true ]]; then
+			echo "pad-pair: pairing $name ($dev)"
+			bz call org.bluez "$dev" org.bluez.Device1 Pair || continue
+		fi
+		bz set-property org.bluez "$dev" org.bluez.Device1 Trusted b true
+		if [[ "$(prop "$dev" Connected)" != true ]]; then
+			bz call org.bluez "$dev" org.bluez.Device1 Connect
+		fi
+		if [[ "$(prop "$dev" Connected)" == true ]]; then
+			echo "pad-pair: $name connected"
+			bz call org.bluez "$adapter" org.bluez.Adapter1 StopDiscovery
+			exit 0
+		fi
+	done
+	sleep 3
+done
+bz call org.bluez "$adapter" org.bluez.Adapter1 StopDiscovery
+exit 0

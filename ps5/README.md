@@ -28,7 +28,8 @@ Lumen.
   loader on port 9021 (on 13.60, the Relapse browser jailbreak does).
 - A USB drive of **64 GB or more**. An external USB SSD is much faster.
 - A PC on the same network as the PS5.
-- A USB controller, keyboard or mouse for setup. A DualSense works over USB.
+- A controller, keyboard or mouse for setup. A DualSense works right away
+  over a USB cable; to use it wirelessly, see step 6.
 
 ## 1. Get the image
 
@@ -93,6 +94,13 @@ MD5 checksum to compare against.
 
 ## 6. First boot
 
+A wireless controller paired with the PS5 system software isn't paired with
+Linux. Either plug it in with a USB cable, or pair it: right after Lumen
+starts, **hold PS + Create on the DualSense until the light bar flashes**.
+Lumen pairs and connects it by itself during the first 15 minutes after
+each start (Xbox and 8BitDo controllers work the same way with their
+pairing button).
+
 The first start shows Lumen's power-on screen:
 
 - **Set up Lumen OS** picks language, region, keyboard and your profile
@@ -120,6 +128,11 @@ from the shell, or hold the power button.
   `0x20000000`, 512 MB, which lets the GPU borrow more as needed).
 
 ## Troubleshooting
+
+**Logs:** every minute Lumen copies its logs to a `lumen-logs` folder on the
+USB drive's `boot` partition. Plug the drive into a PC after a try and send
+`status.txt`, `journal.txt` and any `installer-session.log` or
+`calamares.log` along with your report.
 
 The light is white but the screen stays black. Open the `boot` partition of
 the USB drive on a PC and edit `cmdline.txt` (one line):
