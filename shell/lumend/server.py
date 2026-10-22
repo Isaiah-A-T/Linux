@@ -9,7 +9,7 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import __version__, apps, art, fun, jobs, library, mock, store, system, users
+from . import __version__, apps, art, fun, jobs, library, mock, store, system, update, users
 from .util import ApiError, mock_enabled
 
 
@@ -73,6 +73,9 @@ ROUTES = {
     ("POST", "/api/airplane"): lambda q, b: system.airplane_set(b.get("enabled")),
     ("POST", "/api/power"): lambda q, b: system.power(b.get("action")),
     ("POST", "/api/install-os"): _install_os,
+    ("GET", "/api/update"): lambda q, b: update.status(),
+    ("POST", "/api/update/check"): lambda q, b: update.check(),
+    ("POST", "/api/update/start"): lambda q, b: update.start(),
 
     ("GET", "/api/library"): lambda q, b: library.overview(),
     ("POST", "/api/library/refresh"): lambda q, b: (library.items(refresh=True), library.overview())[1],

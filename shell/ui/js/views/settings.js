@@ -1,14 +1,131 @@
 // Settings: the things you don't need every day. Wi-Fi and Bluetooth live in
 // Quick Settings and game accounts in the Library; Settings links to them.
 
-import { get } from "../api.js";
+import { get, post } from "../api.js";
 import { fmtBytes, h, icon } from "../dom.js";
 import { focus } from "../focus.js";
+import { toast } from "../layers.js";
 import { openQuickSettings } from "../quick.js";
-import { setHero, state } from "../state.js";
+import { pollJobs, setHero, state, subscribe } from "../state.js";
 
-export function render(ctx) {
-  let page = "storage";
+const UPDATE_JOB = "system:update";
+
+function daysAgo(t) {
+  if (!t) return "Never";
+  const d = Math.floor((Date.now() / 1000 - t) / 86400);
+  return d < 1 ? "Today" : d === 1 ? "Yesterday" : `${d} days ago`;
+}
+
+// Settings › System update: pacman (the OS and the Lumen shell), then Flatpak
+// and Snap apps, in place. Repaints itself from the jobs poll while it runs.
+function updatePage() {
+  const box = h("div.update");
+  let info = null;
+  let checking = false;
+  const job = () => [...(state.jobs || [])].reverse().find((j) => j.item_id === UPDATE_JOB);
+
+  async function check() {
+    checking = true;
+    paint();
+    try {
+      info = await post("update/check");
+    } catch (e) {
+      toast(e.message, icon("info"));
+    }
+    checking = false;
+    paint(true);
+  }
+
+  async function start() {
+    try {
+      await post("update/start");
+      pollJobs();
+    } catch (e) {
+      toast(e.message, icon("info"));
+    }
+  }
+
+  function headline() {
+    const j = job();
+    if (j?.state === "running") {
+      return [h("b", {}, `Updating… ${Math.round(j.progress)}%`),
+        h("div.meter", h("i", { style: { width: `${j.progress}%` } })),
+        h("small", {}, [j.message, j.detail].filter(Boolean).join(" · "))];
+    }
+    if (j?.state === "done" && j.reboot) return [h("b", {}, "Restart to finish updating"), h("small", {}, "The new system and shell start after a restart.")];
+    if (j?.state === "done") return [h("b", {}, "Lumen OS is up to date")];
+    if (j?.state === "failed") return [h("b", {}, "The update didn't finish"), h("small", {}, j.message || j.detail || "")];
+    if (checking) return [h("b", {}, "Checking for updates…")];
+    if (info?.error) return [h("b", {}, "Couldn't check for updates"), h("small", {}, info.error)];
+    if (!info?.checked) return [h("b", {}, "Check for updates or update now")];
+    const n = info.packages.length + info.apps;
+    if (!n) return [h("b", {}, "Lumen OS is up to date")];
+    const pkgs = info.packages.slice(0, 6).map((p) => `${p.name} ${p.new}`);
+    if (info.packages.length > 6) pkgs.push(`and ${info.packages.length - 6} more`);
+    if (info.apps) pkgs.push(`${info.apps} app${info.apps === 1 ? "" : "s"}`);
+    return [h("b", {}, `${n} update${n === 1 ? "" : "s"} available`), h("small", {}, pkgs.join(" · "))];
+  }
+
+  function paint(refocus = false) {
+    const keep = box.querySelector(".focused")?.dataset.key;
+    const j = job();
+    const running = j?.state === "running";
+    const live = state.info.live;
+    const actions = [];
+    if (j?.state === "done" && j.reboot) {
+      actions.push(h("button.btn.primary.f.ring", { "data-key": "restart", onclick: () => post("power", { action: "reboot" }) },
+        icon("restart"), "Restart now"));
+    }
+    actions.push(
+      h(`button.btn.f.ring${j?.reboot && j.state === "done" ? "" : ".primary"}`,
+        { "data-key": "start", disabled: running || live || !info?.available, onclick: start }, icon("update"), "Update now"),
+      h("button.btn.f.ring", { "data-key": "check", disabled: running || checking || live || !info?.available, onclick: check },
+        icon("search"), "Check for updates"));
+    box.replaceChildren(
+      h("div.job", headline()),
+      // Buttons right under the status so → from the nav lands on them.
+      h("div.actions", { "data-group": true, style: { display: "flex", gap: "1rem", flexWrap: "wrap", margin: "1.4rem 0" } }, actions),
+      h("div.kv",
+        "Lumen", h("b", {}, state.info.version || ""),
+        "Last updated", h("b", {}, daysAgo(info?.last_upgrade))),
+      h("p", { style: { color: "var(--muted)", lineHeight: 1.6, marginTop: "1.6rem" } },
+        live ? "Install Lumen OS to get updates. The live system resets when it restarts."
+          : info && !info.available ? "The update helper isn't installed on this system."
+            : "Updates the system, the Lumen shell, and your Flatpak and Snap apps without reinstalling. Your games, saves and settings stay put. Steam, Epic and GOG games update from the Library."));
+    const again = keep && box.querySelector(`[data-key="${keep}"]:not(:disabled)`);
+    if (again) focus(again, { scroll: false });
+    else if ((refocus || keep) && box.isConnected) {
+      // Both buttons are disabled while an update runs; park focus on the nav.
+      const next = box.querySelector(".f:not(:disabled)") || document.querySelector(".settings .nav .sel");
+      if (next) focus(next, { scroll: false });
+    }
+  }
+
+  let last = "";
+  const unsub = subscribe((k) => {
+    if (k !== "jobs" || !box.isConnected) return;
+    const j = job();
+    const sig = j ? `${j.id}:${j.state}:${j.progress}:${j.message}:${j.detail}` : "";
+    if (sig === last) return;
+    const finished = last.includes(":running:") && j && j.state !== "running";
+    last = sig;
+    if (finished) get("update").then((u) => { info = u; paint(); }).catch(() => paint());
+    else paint();
+  });
+
+  return {
+    destroy: unsub,
+    build: async () => {
+      info = await get("update").catch(() => null);
+      paint();
+      return box;
+    },
+  };
+}
+
+export function render(ctx, params = {}) {
+  let page = params.page || "storage";
+  const update = updatePage();
   const pane = h("div.pane");
   const nav = h("div.nav", { "data-group": true });
   const el = h("div.view",
@@ -23,6 +140,7 @@ export function render(ctx) {
         h("div.meter", h("i", { style: { width: `${(100 * d.used) / d.total}%` } })),
         h("small", { style: { color: "var(--muted)" } }, `${fmtBytes(d.used)} used of ${fmtBytes(d.total)}`)));
     }],
+    update: ["System update", "update", update.build],
     controllers: ["Controllers", "pad", async () => {
       const pads = [...(navigator.getGamepads?.() || [])].filter(Boolean);
       return [
@@ -71,5 +189,5 @@ export function render(ctx) {
 
   setHero(null);
   show(page).then(() => { focus(nav.querySelector(".f")); ctx.ready(); });
-  return { el, hints: [["A", "Select"], ["B", "Back"]] };
+  return { el, hints: [["A", "Select"], ["B", "Back"]], destroy: update.destroy };
 }

@@ -28,6 +28,19 @@ state = {
     "brightness": {"available": True, "level": 80},
     "battery": {"present": True, "level": 72, "charging": False},
     "airplane": False,
+    "update": {
+        "available": True,
+        "last_upgrade": time.time() - 9 * 86400,
+        "checked": None,
+        "packages": [
+            {"name": "lumen", "old": "0.1.0.r20261020.101500-1", "new": "0.1.0.r20261022.163000-1", "ignored": False},
+            {"name": "linux", "old": "6.17.3.arch1-1", "new": "6.17.5.arch1-1", "ignored": False},
+            {"name": "mesa", "old": "1:25.2.4-1", "new": "1:25.2.5-1", "ignored": False},
+            {"name": "steam", "old": "1.0.0.83-1", "new": "1.0.0.84-1", "ignored": False},
+        ],
+        "apps": 3,
+        "error": None,
+    },
     "media": {
         "available": True,
         "playing": True,

@@ -1,9 +1,11 @@
 // The console shell has no password prompt for system actions, so let local
-// admins (wheel) install Snap apps and manage networks without one.
+// admins (wheel) install Snap apps, manage networks and update the system
+// (org.lumenos.update, Settings › System update) without one.
 polkit.addRule(function (action, subject) {
     if (!subject.local || !subject.active || !subject.isInGroup("wheel"))
         return;
     if (action.id == "io.snapcraft.snapd.manage" ||
+        action.id == "org.lumenos.update" ||
         action.id.indexOf("org.freedesktop.NetworkManager.") == 0)
         return polkit.Result.YES;
 });
