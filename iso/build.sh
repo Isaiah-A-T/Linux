@@ -104,11 +104,20 @@ sed -i \
 	-e 's/^iso_publisher=.*/iso_publisher="Lumen OS"/' \
 	-e 's/^iso_application=.*/iso_application="Lumen OS live"/' \
 	"$profile/profiledef.sh"
-cat >> "$profile/profiledef.sh" <<'PERMS'
-file_permissions+=(
-  ["/usr/local/bin/lumen-live-setup"]="0:0:755"
-)
-PERMS
+# archiso copies overlay files as 0644; list the executables here. The
+# installer keeps its own list in installer/file-permissions.txt
+# ("<path> <uid:gid:mode>" per line, # comments).
+{
+	echo 'file_permissions+=('
+	echo '  ["/usr/local/bin/lumen-live-setup"]="0:0:755"'
+	if [[ -f "$repo_root/installer/file-permissions.txt" ]]; then
+		while read -r path perms _; do
+			[[ -z "$path" || "$path" == \#* ]] && continue
+			printf '  ["%s"]="%s"\n' "$path" "$perms"
+		done < "$repo_root/installer/file-permissions.txt"
+	fi
+	echo ')'
+} >> "$profile/profiledef.sh"
 
 mkarchiso -v -w "$work/mkarchiso" -o "$out" "$profile"
 echo "ISO written to $out"
