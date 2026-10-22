@@ -1,0 +1,16 @@
+# Wine's ntsync-autoload depends on NTSYNC-MODULE, which only Arch's own
+# kernels provide. linux-ps5 builds ntsync as a module too
+# (CONFIG_NTSYNC=m), so this empty package provides it on the PS5 image.
+pkgname=lumen-ps5-ntsync
+pkgver=1
+pkgrel=1
+pkgdesc="Marks the ps5-linux kernel's ntsync module as available"
+arch=('any')
+url="https://github.com/Isaiah-A-T/Linux"
+license=('MIT')
+depends=('linux-ps5')
+provides=('NTSYNC-MODULE')
+
+package() {
+	:
+}
