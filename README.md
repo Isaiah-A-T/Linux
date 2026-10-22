@@ -34,6 +34,10 @@ A connected controller works too.
 
 ## Build the ISO
 
+Every push to `main` that touches the OS builds the ISO in GitHub Actions
+("Build ISO" workflow); download it from the run's **lumen-iso** artifact.
+You can also start a build by hand from the Actions tab.
+
 On an Arch Linux machine with `archiso`, `base-devel` and `git` installed:
 
 ```sh

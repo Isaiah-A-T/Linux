@@ -1,0 +1,61 @@
+name: Build ISO
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths: ["iso/**", "session/**", "shell/**", "installer/**", "Makefile", ".github/**"]
+  pull_request:
+    paths: ["iso/**", "session/**", "shell/**", "installer/**", "Makefile", ".github/**"]
+
+concurrency:
+  group: build-iso-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: make test
+
+  iso:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      # The ISO pulls in Steam, Chromium, Wine and Calamares; the stock runner
+      # needs room for the package cache, the root filesystem and the image.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache /usr/local/share/boost
+          sudo docker image prune --all --force
+          df -h /
+
+      - uses: actions/checkout@v4
+
+      - name: Build in an Arch Linux container
+        run: |
+          docker run --rm --privileged \
+            -v "$GITHUB_WORKSPACE:/src" \
+            archlinux:latest bash /src/.github/ci/build-iso.sh /src
+
+      - name: Checksum
+        run: |
+          cd out
+          sudo chown -R "$USER" .
+          sha256sum *.iso | tee SHA256SUMS
+          ls -lh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lumen-iso
+          path: |
+            out/*.iso
+            out/SHA256SUMS
+          compression-level: 0
+          retention-days: 14

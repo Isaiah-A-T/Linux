@@ -29,18 +29,23 @@ build_pkg() {
 	local dir="$1"
 	chown -R "$builder" "$dir"
 	(cd "$dir" && sudo -u "$builder" env PKGDEST="$localrepo" LUMEN_SRC="$repo_root" \
-		makepkg --syncdeps --noconfirm --clean --cleanbuild)
+		makepkg "${2:---syncdeps}" --nocheck --noconfirm --clean --cleanbuild)
 }
 
 pkgdir_tmp="$work/pkgbuilds"
 mkdir -p "$pkgdir_tmp"
 chown "$builder" "$localrepo" "$pkgdir_tmp"
 
-# Our own packages (the shell itself and gogdl).
+# Our own packages (the shell itself and gogdl). lumen is arch=any and only
+# copies files, so its runtime dependencies don't need to be on the build host.
 for p in "$here"/pkgbuilds/*/; do
 	name="$(basename "$p")"
 	cp -a "$p" "$pkgdir_tmp/$name"
-	build_pkg "$pkgdir_tmp/$name"
+	if [[ "$name" == lumen ]]; then
+		build_pkg "$pkgdir_tmp/$name" --nodeps
+	else
+		build_pkg "$pkgdir_tmp/$name" --syncdeps
+	fi
 done
 
 # AUR packages, unless the official repos already carry them. Lists are read
@@ -60,8 +65,10 @@ while read -r pkg; do
 	fi
 	[[ -d "$pkgdir_tmp/aur-$pkg" ]] && continue
 	sudo -u "$builder" git clone --depth 1 "https://aur.archlinux.org/$pkg.git" "$pkgdir_tmp/aur-$pkg"
-	build_pkg "$pkgdir_tmp/aur-$pkg"
-	pacman -U --noconfirm --needed --asdeps "$localrepo/$pkg"-[0-9]*.pkg.tar.zst
+	build_pkg "$pkgdir_tmp/aur-$pkg" --syncdeps
+	# Install it on the host so later AUR builds can depend on it.
+	built=$(compgen -G "$localrepo/$pkg-[0-9]*.pkg.tar.zst" || true)
+	[[ -n "$built" ]] && pacman -U --noconfirm --needed --asdeps $built
 done < <(cat "${aur_lists[@]}")
 
 repo-add "$localrepo/lumen.db.tar.gz" "$localrepo"/*.pkg.tar.zst
