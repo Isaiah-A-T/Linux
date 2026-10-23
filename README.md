@@ -52,6 +52,19 @@ has the icon, description, screenshots and which source it installs from.
 **Sign-in** is a PS5-style "Who's playing?" user picker with avatars and an
 optional PIN or password, running on greetd.
 
+**Screenshots and clips** work from the controller, even in a game. Guide + RB
+takes a screenshot and Guide + LB saves the last 30 seconds as a clip (on an
+Xbox Series controller, tap or hold Share). Both show up in Album on the top
+bar. Screenshots come from gamescope; clips come from `gpu-screen-recorder`
+running in replay mode, which can be turned off or set to 15 to 120 seconds
+in Settings › Saves & captures.
+
+**Cloud saves** use each store's own cloud. Steam Cloud is handled by Steam.
+For Epic and GOG games, Lumen pulls your saves before the game starts and
+uploads them once it (and everything in its Wine prefix) has exited, with
+`legendary sync-saves` and `gogdl save-sync`. Settings › Saves & captures has
+the switch and a Sync now button.
+
 **System update** (Settings › System update) updates the OS, the Lumen shell
 and your Flatpak and Snap apps in place, without reinstalling. Games, saves
 and settings stay put. The shell and the packages Lumen builds from the AUR

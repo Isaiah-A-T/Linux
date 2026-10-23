@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -8,7 +9,7 @@ from unittest import mock
 
 os.environ.setdefault("XDG_DATA_HOME", tempfile.mkdtemp())
 
-from lumend import art, jobs, recents, store, system, update  # noqa: E402
+from lumend import art, capture, fun, jobs, recents, saves, store, system, update  # noqa: E402
 from lumend.launchers import gog, steam, vdf  # noqa: E402
 
 
@@ -243,6 +244,95 @@ class ArtTest(unittest.TestCase):
         self.assertFalse(art.allowed("http://cdn.cloudflare.steamstatic.com/x.jpg"))
         self.assertFalse(art.allowed("https://evilsteamstatic.com/x.jpg"))
         self.assertFalse(art.allowed("https://127.0.0.1/x.jpg"))
+
+
+class CaptureTest(unittest.TestCase):
+    def watcher(self):
+        fired = []
+        w = capture.Watcher(lambda: None, lambda: None)
+        w.fire = lambda fn: fired.append("shot" if fn is w.on_shot else "clip")
+        return w, {"held": set(), "share_down": None}, fired
+
+    def test_guide_combos(self):
+        w, st, fired = self.watcher()
+        w.handle(st, capture.BTN_MODE, 1)
+        w.handle(st, capture.BTN_TR, 1)
+        w.handle(st, capture.BTN_TR, 0)
+        w.handle(st, capture.BTN_TL, 1)
+        self.assertEqual(fired, ["shot", "clip"])
+
+    def test_bumpers_alone_do_nothing(self):
+        w, st, fired = self.watcher()
+        w.handle(st, capture.BTN_TR, 1)
+        w.handle(st, capture.BTN_TL, 1)
+        self.assertEqual(fired, [])
+
+    def test_share_tap_and_hold(self):
+        w, st, fired = self.watcher()
+        w.handle(st, capture.KEY_RECORD, 1)
+        w.handle(st, capture.KEY_RECORD, 0)
+        w.handle(st, capture.KEY_RECORD, 1)
+        st["share_down"] -= capture.HOLD + 0.1
+        w.handle(st, capture.KEY_RECORD, 0)
+        self.assertEqual(fired, ["shot", "clip"])
+
+    def test_album_serves_only_captures(self):
+        with tempfile.TemporaryDirectory() as d:
+            with mock.patch.dict(os.environ, {"XDG_PICTURES_DIR": d, "XDG_VIDEOS_DIR": d}):
+                shots, clips = capture.shots_dir(), capture.clips_dir()
+                shots.mkdir(parents=True)
+                clips.mkdir(parents=True)
+                self.assertTrue(fun.album_allowed(str(shots / "a.png")))
+                self.assertTrue(fun.album_allowed(str(clips / "a.mp4")))
+                self.assertFalse(fun.album_allowed(str(shots / "a.mp4")))
+                self.assertFalse(fun.album_allowed(str(clips / "../../etc.png")))
+
+
+class SavesTest(unittest.TestCase):
+    def test_gog_locations_resolve_inside_prefix(self):
+        with tempfile.TemporaryDirectory() as d:
+            game, prefix = Path(d) / "game", Path(d) / "pfx"
+            game.mkdir()
+            (prefix / "drive_c/users/steamuser").mkdir(parents=True)
+            (game / "goggame-7.info").write_text(json.dumps({"clientId": "c1"}))
+            config = {"content": {"Windows": {"cloudStorage": {"enabled": True, "locations": [
+                {"name": "saves", "location": "<?SAVED_GAMES?>\\Studio\\Game"},
+                {"name": "cfg", "location": "<?INSTALL?>/cfg"},
+                {"name": "odd", "location": "<?SOMETHING_ELSE?>/x"},
+            ]}}}}
+            resp = mock.MagicMock()
+            resp.__enter__.return_value = resp
+            with mock.patch("urllib.request.urlopen", return_value=resp), \
+                    mock.patch("json.load", return_value=config):
+                locs = saves.gog_locations(game, "7", prefix)
+        self.assertEqual(locs, [
+            {"name": "saves", "path": f"{prefix}/drive_c/users/steamuser/Saved Games/Studio/Game"},
+            {"name": "cfg", "path": f"{game}/cfg"},
+        ])
+
+    def test_prefix_idle_returns_when_nothing_runs_there(self):
+        saves.wait_prefix_idle("/nonexistent/prefix", poll=0.01)
+
+    def test_play_syncs_down_runs_then_up(self):
+        order = []
+        proc = mock.MagicMock()
+        proc.wait.side_effect = lambda: order.append("exit")
+
+        def start():
+            order.append("start")
+            return proc
+
+        def sync(direction):
+            order.append(direction)
+            return True
+
+        with mock.patch.object(saves, "wait_prefix_idle"):
+            saves.play("epic:x", "X", "/p", start, sync)
+            for t in threading.enumerate():
+                if t.name == "saves:epic:x":
+                    t.join(5)
+        self.assertEqual(order, ["down", "start", "exit", "up"])
+        self.assertTrue(saves.last_sync("epic:x")["ok"])
 
 
 if __name__ == "__main__":

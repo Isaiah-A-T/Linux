@@ -16,6 +16,14 @@ function daysAgo(t) {
   return d < 1 ? "Today" : d === 1 ? "Yesterday" : `${d} days ago`;
 }
 
+function since(t) {
+  const s = Date.now() / 1000 - t;
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  return daysAgo(t).toLowerCase();
+}
+
 // Settings › System update: pacman (the OS and the Lumen shell), then Flatpak
 // and Snap apps, in place. Repaints itself from the jobs poll while it runs.
 function updatePage() {
@@ -123,9 +131,91 @@ function updatePage() {
   };
 }
 
+// Settings › Saves & captures: cloud saves for Epic and GOG (Steam syncs its
+// own), and the controller's screenshot and clip buttons.
+function savesPage() {
+  const box = h("div");
+  let saves = null;
+  let cap = null;
+  const syncJob = () => [...(state.jobs || [])].reverse().find((j) => j.item_id === "saves:all");
+
+  const toggle = (key, label, sub, on, onclick) => h("button.item.f.ring", { "data-key": key, onclick },
+    h("div.grow", h("b", {}, label), h("small", {}, sub)),
+    h("span", { class: "btn" + (on ? " primary" : ""), style: { height: "2.2rem", padding: "0 1rem" } }, on ? "On" : "Off"));
+
+  async function act(fn) {
+    try {
+      await fn();
+    } catch (e) {
+      toast(e.message, icon("info"));
+    }
+    paint();
+  }
+
+  function paint() {
+    const keep = box.querySelector(".focused")?.dataset.key;
+    const j = syncJob();
+    const syncing = j?.state === "running";
+    const muted = { color: "var(--muted)", lineHeight: 1.6 };
+    box.replaceChildren(
+      h("div.section-label", {}, "Cloud saves"),
+      h("div.list", { "data-group": true },
+        toggle("saves", "Cloud saves", saves.enabled ? "Synced before and after every game" : "Saves stay on this console only",
+          saves.enabled, () => act(async () => { saves = await post("saves", { enabled: !saves.enabled }); })),
+        h("button.item.f.ring", { "data-key": "sync", disabled: syncing || !saves.enabled,
+          onclick: () => act(async () => { await post("saves/sync"); pollJobs(); }) },
+          icon("update"),
+          h("div.grow", h("b", {}, syncing ? `Syncing… ${Math.round(j.progress)}%` : "Sync now"),
+            h("small", {}, j && !syncing ? j.message : saves.last_sync ? `Last synced ${since(saves.last_sync)}` : "Not synced yet")))),
+      h("div.kv", { style: { margin: "1rem 0 0.4rem" } },
+        ...saves.stores.flatMap((st) => [st.name, h("b", {}, st.connected ? st.how : "Not connected")])),
+      h("div.section-label", { style: { marginTop: "2rem" } }, "Screenshots and clips"),
+      h("div.kv", { style: { marginBottom: "1rem" } },
+        "Screenshot", h("b", {}, "Guide + RB, or tap Share"),
+        "Save a clip", h("b", {}, `Guide + LB, or hold Share · last ${cap.clip_length} seconds`)),
+      h("div.list", { "data-group": true },
+        toggle("clips", "Record clips in the background",
+          !cap.clips_available ? "gpu-screen-recorder isn't installed" : cap.recording ? "Recording · uses a little GPU power" : cap.clips ? "Starting…" : "Off",
+          cap.clips, () => act(async () => { cap = await post("capture", { clips: !cap.clips }); })),
+        h("button.item.f.ring", { "data-key": "length",
+          onclick: () => act(async () => {
+            const all = cap.clip_lengths;
+            cap = await post("capture", { clip_length: all[(all.indexOf(cap.clip_length) + 1) % all.length] });
+          }) },
+          h("div.grow", h("b", {}, "Clip length"), h("small", {}, "How much a saved clip goes back")),
+          h("span.btn", { style: { height: "2.2rem", padding: "0 1rem" } }, `${cap.clip_length} s`))),
+      h("p", { style: { ...muted, marginTop: "1.2rem" } },
+        "Screenshots and clips show up in Album on the top bar. They're saved to Pictures › Screenshots and Videos › Clips."));
+    const again = keep && box.querySelector(`[data-key="${keep}"]:not(:disabled)`);
+    if (again) focus(again, { scroll: false });
+  }
+
+  let last = "";
+  const unsub = subscribe((k) => {
+    if (k !== "jobs" || !box.isConnected || !saves) return;
+    const j = syncJob();
+    const sig = j ? `${j.id}:${j.state}:${j.progress}` : "";
+    if (sig === last) return;
+    const finished = last.includes(":running:") && j && j.state !== "running";
+    last = sig;
+    if (finished) get("saves").then((r) => { saves = r; paint(); });
+    else paint();
+  });
+
+  return {
+    destroy: unsub,
+    build: async () => {
+      [saves, cap] = await Promise.all([get("saves"), get("capture")]);
+      paint();
+      return box;
+    },
+  };
+}
+
 export function render(ctx, params = {}) {
   let page = params.page || "storage";
   const update = updatePage();
+  const savesCaptures = savesPage();
   const pane = h("div.pane");
   const nav = h("div.nav", { "data-group": true });
   const el = h("div.view",
@@ -141,6 +231,7 @@ export function render(ctx, params = {}) {
         h("small", { style: { color: "var(--muted)" } }, `${fmtBytes(d.used)} used of ${fmtBytes(d.total)}`)));
     }],
     update: ["System update", "update", update.build],
+    saves: ["Saves & captures", "image", savesCaptures.build],
     controllers: ["Controllers", "pad", async () => {
       const pads = [...(navigator.getGamepads?.() || [])].filter(Boolean);
       return [
@@ -189,5 +280,5 @@ export function render(ctx, params = {}) {
 
   setHero(null);
   show(page).then(() => { focus(nav.querySelector(".f")); ctx.ready(); });
-  return { el, hints: [["A", "Select"], ["B", "Back"]], destroy: update.destroy };
+  return { el, hints: [["A", "Select"], ["B", "Back"]], destroy: () => { update.destroy(); savesCaptures.destroy(); } };
 }

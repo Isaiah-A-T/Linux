@@ -15,6 +15,13 @@ until python3 -c "import urllib.request,sys; urllib.request.urlopen('http://127.
 	sleep 0.2
 done
 
+# Inside gamescope: tell lumend which X display is gamescope's, so the
+# controller's screenshot button can reach it (shell/lumend/capture.py).
+if [ -n "${GAMESCOPE_WAYLAND_DISPLAY:-}" ] && [ -n "${DISPLAY:-}" ] && [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+	mkdir -p "$XDG_RUNTIME_DIR/lumen"
+	printf '%s\n' "$DISPLAY" >"$XDG_RUNTIME_DIR/lumen/gamescope-display"
+fi
+
 exec chromium \
 	--kiosk \
 	--ozone-platform-hint=auto \

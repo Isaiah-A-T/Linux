@@ -89,6 +89,18 @@ When an app exists in both, it shows once, and Flatpak is preferred because it
 needs no extra daemon. The app page shows the icon, summary, description,
 screenshots and which source it will install from.
 
+## Captures and cloud saves
+
+`shell/lumend/capture.py` reads controllers straight from `/dev/input`
+(read only, nothing is grabbed), because the shell's Chromium doesn't see the
+pad while a game has focus. Guide + RB asks gamescope for a screenshot by
+setting `GAMESCOPECTRL_REQUEST_SCREENSHOT` on its X root window (lumen-ui
+writes gamescope's display to `$XDG_RUNTIME_DIR/lumen/gamescope-display`).
+Guide + LB sends SIGUSR1 to `gpu-screen-recorder`, which runs in replay mode.
+
+`shell/lumend/saves.py` wraps Epic and GOG launches: sync down, start the
+game, wait for its Wine prefix to go idle, sync up. Steam Cloud needs nothing.
+
 ## Milestones
 
 1. **Boot to shell.** archiso overlay, gamescope session, lumend skeleton,

@@ -3,3 +3,4 @@
 legendary
 umu-launcher
 snapd
+gpu-screen-recorder

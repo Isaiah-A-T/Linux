@@ -5,7 +5,7 @@ import os
 import subprocess
 import time
 
-from .. import jobs
+from .. import jobs, saves
 from ..util import ApiError, data_dir, games_dir, have, load_json, run, save_json
 from . import proton
 from .base import Launcher
@@ -132,6 +132,16 @@ class Epic(Launcher):
         if wrapper is None:
             raise ApiError("Neither umu-launcher nor Wine is installed.")
         cmd = ["legendary", "launch", game_id, "--no-wine", "--wrapper", " ".join(wrapper)]
-        subprocess.Popen(cmd, env=proton.env_for("egs", game_id), start_new_session=True,
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                         cwd=os.path.expanduser("~"))
+        env = proton.env_for("egs", game_id)
+        title = self._installed().get(game_id, {}).get("title") or game_id
+        saves.play(f"epic:{game_id}", title, env["WINEPREFIX"],
+                   lambda: subprocess.Popen(cmd, env=env, start_new_session=True,
+                                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                            cwd=os.path.expanduser("~")),
+                   lambda direction: self.sync_saves(game_id, direction))
+
+    def installed_ids(self):
+        return list(self._installed())
+
+    def sync_saves(self, game_id, direction):
+        return saves.legendary_sync(game_id, proton.prefix_for("egs", game_id), direction)
