@@ -6,8 +6,14 @@ Flatpak apps, then Snap apps. The pacman step needs root, so it goes through
 pkexec to lumen-update-system; polkit lets admins (wheel) do that without a
 password. Flatpaks from the Store are --user installs and Snap has its own
 polkit action, so those two run as the player.
+
+Automatic updates run as root from lumen-auto-update.timer (the same helper's
+`auto` command). It writes how it got on to AUTO_STATUS, and holds LOCK while
+it works; lumend reads both to show background updates in Settings and in
+Notifications.
 """
 
+import fcntl
 import os
 import re
 import time
@@ -18,7 +24,15 @@ from .util import ApiError, have, mock_enabled, run
 
 HELPER = "/usr/lib/lumen/lumen-update-system"
 JOB_ID = "system:update"
+AUTO_JOB_ID = "system:auto-update"
 PACMAN_LOG = "/var/log/pacman.log"
+PACMAN_LOCAL = "/var/lib/pacman/local"
+AUTO_CONF = "/etc/lumen/update.conf"
+AUTO_STATUS = "/var/lib/lumen/auto-update"
+LOCK = "/run/lumen-update.lock"
+AUTO_MODES = ("install", "download", "off")
+# The helper's states while it works; anything else is a finished run.
+_AUTO_BUSY = ("checking", "downloading", "waiting", "installing")
 
 # pacman's "(12/40) upgrading mesa" lines while it installs.
 _PACMAN_STEP = re.compile(r"^\(\s*(\d+)/(\d+)\)\s+(?:upgrading|installing|reinstalling|downgrading|removing)\b")
@@ -67,6 +81,142 @@ def last_upgrade(path=PACMAN_LOG):
     return None
 
 
+def parse_auto_status(text):
+    """The helper's key=value status file as a dict, with numbers as numbers."""
+    out = {}
+    for line in text.splitlines():
+        key, sep, value = line.partition("=")
+        if sep:
+            out[key.strip()] = value.strip()
+    for key in ("time", "count"):
+        try:
+            out[key] = int(out.get(key) or 0)
+        except ValueError:
+            out[key] = 0
+    return out
+
+
+def auto_mode(path=AUTO_CONF):
+    """AUTO_UPDATE from update.conf: install (the default), download or off."""
+    try:
+        with open(path) as f:
+            for line in f:
+                match = re.match(r"\s*AUTO_UPDATE=[\"']?(\w+)", line)
+                if match and match.group(1) in AUTO_MODES:
+                    return match.group(1)
+    except OSError:
+        pass
+    return "install"
+
+
+def _update_locked():
+    """True while the helper holds its lock (an update is downloading or installing)."""
+    try:
+        fd = os.open(LOCK, os.O_RDONLY)
+    except OSError:
+        return False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        return False
+    except OSError:
+        return True
+    finally:
+        os.close(fd)
+
+
+def auto_status():
+    if mock_enabled():
+        return dict(mock.state["update"]["auto"])
+    try:
+        with open(AUTO_STATUS) as f:
+            st = parse_auto_status(f.read())
+    except OSError:
+        st = {"state": "", "time": 0, "count": 0, "message": ""}
+    # A run that was cut off (turned off while waiting) leaves a busy state behind.
+    st["running"] = st.get("state") in _AUTO_BUSY and _update_locked()
+    if st.get("state") in _AUTO_BUSY and not st["running"]:
+        st["state"] = ""
+    st["mode"] = auto_mode()
+    return st
+
+
+def _local_version(name):
+    """The installed version of a package, from pacman's local database."""
+    try:
+        entries = os.listdir(PACMAN_LOCAL)
+    except OSError:
+        return None
+    prefix = name + "-"
+    for entry in entries:
+        # Entries are name-pkgver-pkgrel; pkgver never contains "-".
+        if entry.startswith(prefix) and entry[len(prefix):].count("-") == 1:
+            return entry[len(prefix):]
+    return None
+
+
+def is_ps5():
+    return _local_version("linux-ps5") is not None
+
+
+# The shell this lumend started with; a newer installed one needs a restart.
+_started_with = _local_version("lumen")
+
+
+def reboot_needed():
+    """True when an update replaced the running kernel or shell."""
+    if mock_enabled():
+        return mock.state["update"]["reboot"]
+    return (not os.path.isdir(f"/usr/lib/modules/{os.uname().release}")
+            or _local_version("lumen") != _started_with)
+
+
+def background_jobs():
+    """Automatic updates, shaped like jobs for the Notifications blade."""
+    st = auto_status()
+    out = []
+    if st["running"] and st["state"] in ("downloading", "installing"):
+        n = st["count"]
+        out.append({"id": "auto-update", "title": "System update", "item_id": AUTO_JOB_ID,
+                    "state": "running", "progress": 0.0, "started": st["time"],
+                    "message": (f"Downloading {n} update{'s' if n != 1 else ''}" if st["state"] == "downloading"
+                                else "Installing in the background")})
+    elif reboot_needed():
+        out.append({"id": "auto-update", "title": "System update", "item_id": AUTO_JOB_ID,
+                    "state": "done", "progress": 100.0, "started": st["time"],
+                    "message": restart_hint()})
+    return out
+
+
+def restart_hint():
+    # Restarting a PS5 drops it back into the PS5 system software.
+    if is_ps5():
+        return "Turn Lumen off, then start it again from your PS5 to finish updating"
+    return "Restart to finish updating"
+
+
+def set_auto(payload):
+    mode = (payload or {}).get("mode")
+    if mode not in AUTO_MODES:
+        raise ApiError("Unknown automatic update setting.")
+    _require_installed()
+    if mock_enabled():
+        mock.state["update"]["auto"]["mode"] = mode
+        return status()
+    try:
+        run(["pkexec", HELPER, "set-auto", mode], timeout=60, check=True)
+    except RuntimeError:
+        raise ApiError("Only an administrator can change automatic updates.")
+    return status()
+
+
+def installing():
+    """True while pacman is changing the system; turning off now could break it."""
+    if mock_enabled():
+        return bool(_running_job())
+    # The helper's lock too, so a db.lck left behind by a crash doesn't count.
+    return os.path.exists("/var/lib/pacman/db.lck") and _update_locked()
+
+
 def _running_job():
     return next((j for j in jobs.all_jobs() if j["item_id"] == JOB_ID and j["state"] == "running"), None)
 
@@ -79,11 +229,15 @@ def _require_installed():
 
 def status():
     if mock_enabled():
-        return {**mock.state["update"], "job": _running_job()}
+        return {**mock.state["update"], "job": _running_job(), "restart_hint": restart_hint()}
     return {
         "available": os.path.exists(HELPER) and have("pkexec"),
         "last_upgrade": last_upgrade(),
         "job": _running_job(),
+        "auto": auto_status(),
+        "reboot": reboot_needed(),
+        "ps5": is_ps5(),
+        "restart_hint": restart_hint(),
         **_last_check,
     }
 
@@ -117,6 +271,8 @@ def start():
     _require_installed()
     if _running_job():
         raise ApiError("An update is already running.")
+    if auto_status()["running"] and auto_status()["state"] == "installing":
+        raise ApiError("Lumen is already installing updates in the background.")
     if mock_enabled():
         mock.state["update"]["packages"] = []
         mock.state["update"]["apps"] = 0
@@ -131,7 +287,6 @@ def start():
         steps.append(("Flatpak apps", ["flatpak", "update", "--user", "--noninteractive", "-y"], 1, jobs.percent))
     if have("snap"):
         steps.append(("Snap apps", ["snap", "refresh"], 1, None))
-    before = run(["pacman", "-Q", "lumen"])
 
     def done(job):
         if not any(job["codes"]):
@@ -140,8 +295,7 @@ def start():
         if job["codes"] and job["codes"][0] in (126, 127):
             job["message"] = "Only an administrator can install system updates."
         # A new kernel removes the running one's modules; a new shell needs lumend restarted.
-        job["reboot"] = (run(["pacman", "-Q", "lumen"]) != before
-                         or not os.path.isdir(f"/usr/lib/modules/{os.uname().release}"))
+        job["reboot"] = reboot_needed()
 
     return jobs.start_steps("System update", steps, on_done=done, item_id=JOB_ID)
 

@@ -1,0 +1,13 @@
+# Before a kernel update (System update brings new linux-ps5 builds from the
+# [lumen-ps5] repo), keep the kernel that works as bzImage.prev and
+# initrd.img.prev on the boot partition. If the new one doesn't start, rename
+# those two back on a PC. See ps5/README.md.
+[Trigger]
+Operation = Upgrade
+Type = Package
+Target = linux-ps5
+
+[Action]
+Description = Keeping the current kernel as a backup...
+When = PreTransaction
+Exec = /usr/lib/lumen-ps5/backup-kernel

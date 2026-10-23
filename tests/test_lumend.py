@@ -141,6 +141,71 @@ class UpdateTest(unittest.TestCase):
         self.assertEqual(seen["state"], "running")  # the hook runs before the job finishes
 
 
+class AutoUpdateTest(unittest.TestCase):
+    def test_parse_auto_status(self):
+        st = update.parse_auto_status("state=waiting\ntime=1792485000\ncount=12\n"
+                                      "message=Will install after you finish playing\n")
+        self.assertEqual(st["state"], "waiting")
+        self.assertEqual(st["time"], 1792485000)
+        self.assertEqual(st["count"], 12)
+        self.assertEqual(st["message"], "Will install after you finish playing")
+        self.assertEqual(update.parse_auto_status("count=x")["count"], 0)
+
+    def test_auto_mode_defaults_to_install(self):
+        self.assertEqual(update.auto_mode("/nonexistent/update.conf"), "install")
+        with tempfile.NamedTemporaryFile("w", suffix=".conf", delete=False) as f:
+            f.write('LUMEN_REPO_URL=https://example.com\nAUTO_UPDATE="download"\n')
+        try:
+            self.assertEqual(update.auto_mode(f.name), "download")
+        finally:
+            os.unlink(f.name)
+
+    def test_local_version_does_not_match_longer_names(self):
+        with tempfile.TemporaryDirectory() as d:
+            for entry in ("lumen-0.1.0.r20261022.163000-1", "lumen-ps5-ntsync-1-1", "linux-ps5-6.15.4-1"):
+                os.mkdir(os.path.join(d, entry))
+            with mock.patch.object(update, "PACMAN_LOCAL", d):
+                self.assertEqual(update._local_version("lumen"), "0.1.0.r20261022.163000-1")
+                self.assertEqual(update._local_version("linux-ps5"), "6.15.4-1")
+                self.assertIsNone(update._local_version("linux"))
+                self.assertTrue(update.is_ps5())
+
+    def test_a_busy_state_without_the_lock_is_stale(self):
+        with tempfile.NamedTemporaryFile("w", delete=False) as f:
+            f.write("state=installing\ntime=1\ncount=3\nmessage=\n")
+        try:
+            with mock.patch.object(update, "AUTO_STATUS", f.name), \
+                    mock.patch.object(update, "LOCK", "/nonexistent/lock"), \
+                    mock.patch.object(update, "AUTO_CONF", "/nonexistent/update.conf"):
+                st = update.auto_status()
+        finally:
+            os.unlink(f.name)
+        self.assertFalse(st["running"])
+        self.assertEqual(st["state"], "")
+        self.assertEqual(st["mode"], "install")
+
+    def test_held_lock_means_running(self):
+        import fcntl
+        with tempfile.NamedTemporaryFile("w", delete=False) as lock, \
+                tempfile.NamedTemporaryFile("w", delete=False) as status:
+            status.write("state=downloading\ntime=1\ncount=3\nmessage=\n")
+        holder = open(lock.name, "w")
+        fcntl.flock(holder, fcntl.LOCK_EX)
+        try:
+            with mock.patch.object(update, "AUTO_STATUS", status.name), \
+                    mock.patch.object(update, "LOCK", lock.name), \
+                    mock.patch.object(update, "reboot_needed", lambda: False):
+                self.assertTrue(update.auto_status()["running"])
+                bg = update.background_jobs()
+        finally:
+            holder.close()
+            os.unlink(lock.name)
+            os.unlink(status.name)
+        self.assertEqual(len(bg), 1)
+        self.assertEqual(bg[0]["state"], "running")
+        self.assertEqual(bg[0]["message"], "Downloading 3 updates")
+
+
 class RecentsTest(unittest.TestCase):
     def test_home_is_capped_at_15_and_ordered(self):
         now = time.time()

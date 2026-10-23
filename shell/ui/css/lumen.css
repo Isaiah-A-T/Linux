@@ -518,3 +518,7 @@ svg.i { width: 1.5rem; height: 1.5rem; flex: none; stroke: currentColor; fill: n
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* Background work with no known progress: a sliding bar. */
+.meter.busy i { width: 35%; animation: meter-busy 1.6s ease-in-out infinite; }
+@keyframes meter-busy { from { transform: translateX(-100%); } to { transform: translateX(290%); } }

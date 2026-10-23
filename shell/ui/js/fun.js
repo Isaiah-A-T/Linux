@@ -93,10 +93,16 @@ export function openNotifications() {
       h("h2", {}, "Notifications"),
       h("div.body",
         jobs.length === 0 ? h("div.empty", {}, "You're all caught up.") :
-        h("div.list", jobs.map((j) => h("div.job.f.ring",
-          h("b", {}, j.title),
-          h("small", {}, j.state === "running" ? `${Math.round(j.progress)}% · ${j.message || ""}` : j.state === "done" ? "Finished" : `Failed: ${j.message}`),
-          j.state === "running" ? h("div.meter", h("i", { style: { width: `${j.progress}%` } })) : null)))),
+        h("div.list", jobs.map((j) => {
+          // Automatic updates run in the background with no percentage.
+          const auto = j.item_id === "system:auto-update";
+          return h("div.job.f.ring",
+            h("b", {}, j.title),
+            h("small", {}, j.state === "running" ? (auto ? j.message : `${Math.round(j.progress)}% · ${j.message || ""}`)
+              : j.state === "done" ? (auto ? j.message : "Finished") : `Failed: ${j.message}`),
+            j.state !== "running" ? null
+              : auto ? h("div.meter.busy", h("i")) : h("div.meter", h("i", { style: { width: `${j.progress}%` } })));
+        }))),
     ];
   }, { onClose: () => unsub?.() });
   unsub = subscribe((k) => k === "jobs" && blade.render());
