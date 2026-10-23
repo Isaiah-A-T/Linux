@@ -1,6 +1,6 @@
 // The game/app sheet: play, install with progress, uninstall.
 
-import { post } from "./api.js";
+import { get, post } from "./api.js";
 import { h, icon, SOURCE_LABEL, timeAgo } from "./dom.js";
 import { confirmSheet, openSheet, toast } from "./layers.js";
 import { pollJobs, state, subscribe } from "./state.js";
@@ -24,12 +24,53 @@ export async function install(item) {
   }
 }
 
+const TIER = { platinum: "Platinum", gold: "Gold", silver: "Silver", bronze: "Bronze", borked: "Borked", native: "Native" };
+const DECK = { verified: "Deck Verified", playable: "Deck Playable", unsupported: "Not on Deck" };
+
+function toolName(compat, id) {
+  return compat.tools.find((t) => t.id === id)?.name || id;
+}
+
+// Steam games: pick which Proton runs this game, or leave it to Steam.
+function chooseProton(item, compat, onPicked) {
+  openSheet(({ close }) => {
+    const pick = async (tool) => {
+      close();
+      try {
+        const next = await post("library/compat", { id: item.id, tool });
+        toast(tool ? `${item.title} will run with ${toolName(next, tool)}` : `${item.title} uses Steam's default again`, icon("check"));
+        onPicked(next);
+      } catch (e) {
+        toast(e.message, icon("info"));
+      }
+    };
+    const row = (tool, title, sub) => h("button.item.f.ring", { "data-autofocus": compat.tool === tool || null, onclick: () => pick(tool) },
+      h("div.grow", h("b", {}, title), sub ? h("small", {}, sub) : null),
+      compat.tool === tool ? icon("check") : null);
+    return [
+      h("h3", {}, "Compatibility"),
+      h("p", {}, compat.steam_running
+        ? "Steam closes for a moment to save this. It starts again when you play."
+        : "Windows games run through Proton. Most work with Steam's default."),
+      h("div.list",
+        row("", "Automatic", `Steam's choice: ${compat.default} for Windows games, native for Linux games`),
+        compat.tools.map((t) => row(t.id, t.name, t.id.startsWith("proton_") ? "" : "Custom build"))),
+    ];
+  });
+}
+
 export function jobFor(id) {
   return (state.jobs || []).find((j) => j.item_id === id && j.state === "running");
 }
 
 export function openDetails(item, { onChange } = {}) {
   let unsub = null;
+  let compat = null;
+  if (item.source === "steam") {
+    get(`library/compat?id=${encodeURIComponent(item.id)}`)
+      .then((c) => { compat = c; sheet.render(); })
+      .catch(() => {});
+  }
   const sheet = openSheet(({ close }) => {
     const job = jobFor(item.id);
     const actions = [];
@@ -55,13 +96,23 @@ export function openDetails(item, { onChange } = {}) {
         },
       }, icon("trash"), "Uninstall"));
     }
+    if (compat) {
+      actions.push(h("button.btn.f.ring", { onclick: () => chooseProton(item, compat, (c) => { compat = c; sheet.render(); }) },
+        icon("gear"), compat.tool ? toolName(compat, compat.tool) : "Proton: Automatic"));
+    }
     actions.push(h("button.btn.f.ring", { onclick: close }, "Close"));
-    const runner = item.source === "steam" ? "Runs through Steam with Steam's Proton"
+    const runner = item.source === "steam"
+      ? (compat?.tool ? `Runs through Steam with ${toolName(compat, compat.tool)}` : "Runs through Steam, with Proton for Windows games")
       : item.source === "app" ? "Desktop app" : "Runs with GE-Proton in its own Wine prefix";
+    const ratings = [];
+    if (compat?.protondb) ratings.push(h(`span.pill.rating.${compat.protondb}`, {}, compat.protondb === "native" ? "Linux native" : `ProtonDB ${TIER[compat.protondb] || compat.protondb}`));
+    if (compat?.deck) ratings.push(h(`span.pill.rating.deck-${compat.deck}`, {}, DECK[compat.deck]));
     return [
       h("div.hero", { style: { backgroundImage: `url("${item.art?.hero || item.art?.cover || ""}")` } }),
       h("div.inner",
-        h("span.pill", { class: item.source === "app" ? "flatpak" : "snap" }, SOURCE_LABEL[item.source] || item.source),
+        h("div.pills",
+          h("span.pill", { class: item.source === "app" ? "flatpak" : "snap" }, SOURCE_LABEL[item.source] || item.source),
+          ratings),
         h("h3", { style: { fontSize: "2.6rem", marginTop: "0.6rem" } }, item.title),
         h("p", {}, [timeAgo(item.last_played), runner].filter(Boolean).join(" · ")),
         h("div.actions", actions)),

@@ -39,7 +39,12 @@ offline. Apps keep the normal background.
 ![Game details](docs/screenshots/game-details.png)
 
 **Launcher accounts.** Connect Steam, Epic and GOG under Library › Accounts.
-Steam games run through the Steam client and its own Proton. Epic games
+Steam games run through the Steam client and its own Proton.
+Lumen turns on Steam Play for every title before Steam's first start, so
+Windows-only games install and run with Proton Experimental without visiting
+Steam's settings, and Steam stays hidden behind Lumen while a game starts. A
+Steam game's page shows its ProtonDB rating and Steam Deck status, and lets
+you pick a different Proton for that game, or a custom build such as GE-Proton. Epic games
 (through `legendary`) and GOG games (through `gogdl`) download into
 `~/Games/<store>/` and run with GE-Proton through `umu-run`, each in its own
 Wine prefix under `~/Games/Prefixes/`. Plain Wine is installed too, for the

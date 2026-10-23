@@ -82,6 +82,8 @@ ROUTES = {
     ("POST", "/api/library/launch"): lambda q, b: library.launch(b["id"]),
     ("POST", "/api/library/install"): lambda q, b: library.install(b["id"]),
     ("POST", "/api/library/uninstall"): lambda q, b: library.uninstall(b["id"]),
+    ("GET", "/api/library/compat"): lambda q, b: library.compat(q.get("id", "")),
+    ("POST", "/api/library/compat"): lambda q, b: library.set_compat(b["id"], b.get("tool", "")),
     ("GET", "/api/accounts"): lambda q, b: {"accounts": library.accounts()},
     ("POST", "/api/accounts/connect"): lambda q, b: {"accounts": library.connect(b["launcher"], b)},
     ("POST", "/api/accounts/disconnect"): lambda q, b: {"accounts": library.disconnect(b["launcher"])},
