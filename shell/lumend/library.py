@@ -118,6 +118,27 @@ def uninstall(item_id):
     return {"ok": True}
 
 
+def _steam_game(item_id):
+    source, ident = _split(item_id)
+    if source != "steam" or not ident.isdigit():
+        raise ApiError("Proton settings are only for Steam games.")
+    return ident
+
+
+def compat(item_id):
+    appid = _steam_game(item_id)
+    if mock_enabled():
+        return mock.steam_compat(appid)
+    return LAUNCHERS["steam"].compat(appid)
+
+
+def set_compat(item_id, tool):
+    appid = _steam_game(item_id)
+    if mock_enabled():
+        return mock.set_steam_compat(appid, tool)
+    return LAUNCHERS["steam"].set_compat(appid, tool or "")
+
+
 def accounts():
     if mock_enabled():
         return [{"id": k, "name": LAUNCHERS[k].name, "available": True, "login": LAUNCHERS[k].login,
