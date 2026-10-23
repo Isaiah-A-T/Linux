@@ -22,6 +22,12 @@ install:
 	install -Dm755 session/lumend $(DESTDIR)$(PREFIX)/bin/lumend
 	install -Dm755 session/lumen-update-system $(DESTDIR)$(PREFIX)/lib/lumen/lumen-update-system
 	install -Dm644 session/lumend.service $(DESTDIR)$(PREFIX)/lib/systemd/user/lumend.service
+	install -Dm644 session/lumen-auto-update.service $(DESTDIR)$(PREFIX)/lib/systemd/system/lumen-auto-update.service
+	install -Dm644 session/lumen-auto-update.timer $(DESTDIR)$(PREFIX)/lib/systemd/system/lumen-auto-update.timer
+# Enabled by the package itself, so systems that update to this version get
+# automatic updates without a setup step. AUTO_UPDATE=off turns them off.
+	install -d $(DESTDIR)$(PREFIX)/lib/systemd/system/timers.target.wants
+	ln -sf ../lumen-auto-update.timer $(DESTDIR)$(PREFIX)/lib/systemd/system/timers.target.wants/lumen-auto-update.timer
 	install -Dm644 session/polkit/50-lumen.rules $(DESTDIR)$(PREFIX)/share/polkit-1/rules.d/50-lumen.rules
 	install -Dm644 session/polkit/org.lumenos.update.policy $(DESTDIR)$(PREFIX)/share/polkit-1/actions/org.lumenos.update.policy
 	install -Dm644 session/lumen.desktop $(DESTDIR)$(PREFIX)/share/wayland-sessions/lumen.desktop

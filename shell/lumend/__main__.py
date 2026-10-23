@@ -23,6 +23,13 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.mock:
         os.environ["LUMEN_MOCK"] = "1"
+    if args.mode == "session" and not args.mock and os.environ.get("LUMEN_MOCK") != "1":
+        # Before Steam's first start, so Windows games get Proton from day one.
+        from .launchers.steam import enable_steam_play
+        try:
+            enable_steam_play()
+        except OSError:
+            pass
     try:
         serve(args.port, args.ui or default_ui(), args.mode)
     except KeyboardInterrupt:

@@ -21,17 +21,21 @@ env:
   PS5_LINUX_IMAGE_REF: 387e311fbc72ad784cb5dcb44c00381926743548
 
 jobs:
-  # The ps5-linux kernel as a pacman package (linux-ps5-*.pkg.tar.zst).
-  # Compiling it takes a while, so it is cached per PS5_LINUX_IMAGE_REF.
+  # The ps5-linux kernel as a pacman package (linux-ps5-*.pkg.tar.zst),
+  # with Lumen's patches from ps5/kernel (MediaTek Wi-Fi and Bluetooth).
+  # Compiling it takes a while, so it is cached per PS5_LINUX_IMAGE_REF
+  # and ps5/kernel contents.
   kernel:
     runs-on: ubuntu-latest
     timeout-minutes: 240
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/cache@v4
         id: cache
         with:
           path: linux-ps5
-          key: linux-ps5-${{ env.PS5_LINUX_IMAGE_REF }}
+          key: linux-ps5-${{ env.PS5_LINUX_IMAGE_REF }}-${{ hashFiles('ps5/kernel/**') }}
 
       - name: Free disk space
         if: steps.cache.outputs.cache-hit != 'true'
@@ -46,6 +50,7 @@ jobs:
           git clone https://github.com/ps5-linux/ps5-linux-image.git
           cd ps5-linux-image
           git checkout "$PS5_LINUX_IMAGE_REF"
+          ../ps5/kernel/prepare.sh .
           ./build_image.sh --kernel-only --distro arch
           mkdir -p ../linux-ps5
           cp linux-bin/linux-ps5-*.pkg.tar.zst ../linux-ps5/
@@ -62,6 +67,8 @@ jobs:
     needs: kernel
     runs-on: ubuntu-latest
     timeout-minutes: 300
+    permissions:
+      contents: write  # publish the [lumen-ps5] kernel repo release
     steps:
       - name: Free disk space
         run: |
@@ -88,6 +95,16 @@ jobs:
           sudo chown -R "$USER" .
           sha256sum lumen-ps5.img.xz | tee SHA256SUMS
           ls -lh
+
+      # Consoles running Lumen update their kernel from this repo (System
+      # update and automatic updates), so a kernel bump here reaches them
+      # without reflashing.
+      - name: Publish the PS5 kernel repo
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: .github/ci/publish-repo.sh out/ps5-repo lumen-ps5-repo lumen-ps5
 
       - uses: actions/upload-artifact@v4
         with:

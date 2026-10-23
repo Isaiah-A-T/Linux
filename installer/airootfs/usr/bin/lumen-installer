@@ -14,7 +14,8 @@ fi
 # Calamares needs root for partitioning. The live user has passwordless
 # sudo, so pass the display through explicitly rather than relying on
 # sudo's environment policy. gamescope only offers Xwayland to clients,
-# hence xcb.
+# hence xcb. Root may not be allowed onto that display by default.
+command -v xhost >/dev/null && xhost +SI:localuser:root >/dev/null 2>&1
 sudo -n env \
 	DISPLAY="${DISPLAY:-:0}" \
 	XAUTHORITY="${XAUTHORITY:-$HOME/.Xauthority}" \

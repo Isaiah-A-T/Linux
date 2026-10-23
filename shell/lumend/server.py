@@ -82,6 +82,7 @@ ROUTES = {
     ("GET", "/api/update"): lambda q, b: update.status(),
     ("POST", "/api/update/check"): lambda q, b: update.check(),
     ("POST", "/api/update/start"): lambda q, b: update.start(),
+    ("POST", "/api/update/auto"): lambda q, b: update.set_auto(b),
 
     ("GET", "/api/library"): lambda q, b: library.overview(),
     ("POST", "/api/library/refresh"): lambda q, b: (library.items(refresh=True), library.overview())[1],
@@ -91,6 +92,8 @@ ROUTES = {
     ("GET", "/api/running"): lambda q, b: resume.status(),
     ("POST", "/api/running/resume"): lambda q, b: (resume.resume(b["id"]), resume.status())[1],
     ("POST", "/api/running/close"): lambda q, b: resume.close(b["id"]),
+    ("GET", "/api/library/compat"): lambda q, b: library.compat(q.get("id", "")),
+    ("POST", "/api/library/compat"): lambda q, b: library.set_compat(b["id"], b.get("tool", "")),
     ("GET", "/api/accounts"): lambda q, b: {"accounts": library.accounts()},
     ("POST", "/api/accounts/connect"): lambda q, b: {"accounts": library.connect(b["launcher"], b)},
     ("POST", "/api/accounts/disconnect"): lambda q, b: {"accounts": library.disconnect(b["launcher"])},
@@ -102,7 +105,7 @@ ROUTES = {
     ("POST", "/api/store/install"): lambda q, b: store.install(b["source"], b["id"]),
     ("POST", "/api/store/remove"): lambda q, b: store.remove(b["source"], b["id"]),
 
-    ("GET", "/api/jobs"): lambda q, b: {"jobs": jobs.all_jobs()},
+    ("GET", "/api/jobs"): lambda q, b: {"jobs": jobs.all_jobs() + update.background_jobs()},
 
     ("GET", "/api/media"): lambda q, b: fun.media(),
     ("POST", "/api/media"): lambda q, b: fun.media_action(b.get("action")),
