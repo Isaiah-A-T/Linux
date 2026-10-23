@@ -5,7 +5,7 @@ Think of the Xbox 360 blades, rebuilt for today: dark glass panels that slide
 in from the edges, big tiles, one accent colour, and no desktop. It works with
 a controller, a mouse, or a keyboard.
 
-![Home, with the focused game's art as the background](docs/screenshots/home-game-art.png)
+![Home, with Hades paused in Quick Resume and its art as the background](docs/screenshots/home-game-art.png)
 
 > **Status: early and mostly untested on real hardware.** The shell is
 > developed and screenshotted against mock data in a browser, the ISO is built
@@ -19,6 +19,8 @@ a controller, a mouse, or a keyboard.
 Quick Settings (Wi-Fi, Bluetooth, sound, brightness, battery, airplane mode)
 and the Settings gear. The right side is for fun: the music player,
 screenshot album, themes, notifications and the clock.
+
+![Quick Settings](docs/screenshots/quick-settings.png)
 
 **Home** shows your 15 most recent games and apps in one row, followed by an
 *All software* tile. The dock below it has Library, Store and Power.
@@ -50,6 +52,11 @@ you pick a different Proton for that game, or a custom build such as GE-Proton. 
 Wine prefix under `~/Games/Prefixes/`. Plain Wine is installed too, for the
 odd game that runs better outside Proton.
 
+<p>
+  <img src="docs/screenshots/accounts.png" width="49%" alt="Library › Accounts">
+  <img src="docs/screenshots/choose-proton.png" width="49%" alt="Picking a Proton version for a Steam game">
+</p>
+
 **Game settings** (a game's details › Game settings) gives each game its own
 frame rate cap (30 to 120 FPS), power mode (Performance, Balanced, or Quiet
 and battery saver) and button layout (swap A/B, X/Y, bumpers and triggers, or
@@ -72,12 +79,21 @@ don't survive a restart or signing out, and online games may drop their
 connection while paused. Apps such as music players keep running when you go
 Home.
 
+![Quick Resume: a paused game's options](docs/screenshots/quick-resume.png)
+
 **Store** searches Flathub and the Snap Store at the same time and merges the
 results. An app that is in both shows once, preferring Flatpak. The app page
 has the icon, description, screenshots and which source it installs from.
 
+<p>
+  <img src="docs/screenshots/store.png" width="49%" alt="Store">
+  <img src="docs/screenshots/store-app.png" width="49%" alt="Store app page">
+</p>
+
 **Sign-in** is a PS5-style "Who's playing?" user picker with avatars and an
 optional PIN or password, running on greetd.
+
+![Sign-in](docs/screenshots/sign-in.png)
 
 **Screenshots and clips** work from the controller, even in a game. Guide + RB
 takes a screenshot and Guide + LB saves the last 30 seconds as a clip (on an
@@ -91,6 +107,8 @@ For Epic and GOG games, Lumen pulls your saves before the game starts and
 uploads them once it (and everything in its Wine prefix) has exited, with
 `legendary sync-saves` and `gogdl save-sync`. Settings › Saves & captures has
 the switch and a Sync now button.
+
+![Settings › Saves & captures](docs/screenshots/saves-captures.png)
 
 **System update** (Settings › System update) updates the OS, the Lumen shell
 and your Flatpak and Snap apps in place, without reinstalling. Games, saves
@@ -141,12 +159,8 @@ HTML, CSS and ES modules in a Chromium kiosk, backed by `lumend`, a small
 Python daemon (standard library only). See
 [docs/ROADMAP.md](docs/ROADMAP.md) for the architecture.
 
-More screenshots: [sign-in](docs/screenshots/01-sign-in.png),
-[Quick Settings](docs/screenshots/05-quick-settings.png),
-[accounts](docs/screenshots/11-accounts.png),
-[store](docs/screenshots/13-store.png),
-[store app page](docs/screenshots/14-store-app.png),
-[on-screen keyboard](docs/screenshots/17-onscreen-keyboard.png).
+Anywhere you can type, a controller brings up an
+[on-screen keyboard](docs/screenshots/onscreen-keyboard.png).
 
 ## Download
 
@@ -200,7 +214,7 @@ CI also checks the following on its own:
 | --- | --- |
 | **Build ISO** | Runs `make test`, builds the ISO in an Arch container, publishes the `[lumen]` pacman repo (on `main`), then boots the ISO in QEMU and screenshots it to the `vm-screenshots` branch |
 | **Build PS5 image** | Builds the ps5-linux kernel package (cached per pinned commit) and the USB image. Nothing boots it, since it needs a real console |
-| **UI screenshots** | On pull requests that touch the shell, runs `lumend` with mock data and screenshots every screen with Playwright to the `ui-screenshots` branch |
+| **UI screenshots** | On pull requests that touch the shell, runs `lumend` with mock data and screenshots every screen with Playwright to the `ui-screenshots` branch. The files are named like the ones in `docs/screenshots`, so refreshing the README's images is a copy |
 
 The installer screens can be rendered without Calamares or Arch:
 
@@ -265,9 +279,8 @@ Not tested yet:
   covered by unit tests, but switching between the shell and a game relies on
   gamescope's focus properties and has not been tried on a real session yet.
   Steam may also keep the Guide button for its own overlay.
-- **The PS5 image.** No CI build of it has finished successfully yet (the
-  first build of the current `main` was still running when this was
-  written), and no one has booted it on a PS5.
+- **The PS5 image.** CI builds it, but nothing boots it there and no one
+  has tried it on a PS5 yet.
 
 Reports from real hardware are very welcome.
 
