@@ -1,7 +1,8 @@
-// The game/app sheet: play, install with progress, uninstall.
+// The game/app sheet: play, install with progress, uninstall, game settings.
 
 import { get, post } from "./api.js";
 import { h, icon, SOURCE_LABEL, timeAgo } from "./dom.js";
+import { openGameSettings } from "./gamesettings.js";
 import { confirmSheet, openSheet, toast } from "./layers.js";
 import { pollJobs, pollRunning, runningEntry, state, subscribe } from "./state.js";
 
@@ -140,6 +141,11 @@ export function openDetails(item, { onChange } = {}) {
     if (compat) {
       actions.push(h("button.btn.f.ring", { onclick: () => chooseProton(item, compat, (c) => { compat = c; sheet.render(); }) },
         icon("gear"), compat.tool ? toolName(compat, compat.tool) : "Proton: Automatic"));
+    }
+    if (item.kind === "game") {
+      actions.push(h("button.btn.f.ring", {
+        onclick: () => { close(); openGameSettings(item, { onBack: () => openDetails(item, { onChange }) }); },
+      }, icon("sliders"), "Game settings"));
     }
     actions.push(h("button.btn.f.ring", { onclick: close }, "Close"));
     const runner = item.source === "steam"

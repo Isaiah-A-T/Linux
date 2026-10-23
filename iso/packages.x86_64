@@ -38,6 +38,8 @@ mangohud
 playerctl
 brightnessctl
 python-requests
+# Per-game power mode (Game settings)
+power-profiles-daemon
 
 # Apps
 flatpak

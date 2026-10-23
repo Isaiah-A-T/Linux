@@ -33,7 +33,8 @@ class Launcher:
     def uninstall(self, game_id):
         raise NotImplementedError
 
-    def launch(self, game_id):
-        """Start the game. Returns its Popen, or None when another client
-        (Steam) starts it for us."""
+    def launch(self, game_id, env=None):
+        """Start a game. env adds variables for the game's process. Returns
+        its Popen, or None when another client (Steam) starts it for us or
+        its cloud saves download first."""
         raise NotImplementedError

@@ -4,7 +4,7 @@ import os
 import threading
 import time
 
-from . import apps, art, jobs, mock, recents, resume
+from . import apps, art, gamesettings, jobs, mock, recents, resume
 from .launchers import LAUNCHERS
 from .util import ApiError, mock_enabled, session_env
 
@@ -81,17 +81,31 @@ def _split(item_id):
 def launch(item_id):
     """Start a game or app, or jump back into it if it's already running."""
     if resume.get(item_id):
-        return {"ok": True, "resumed": True, "closed": [], "running": resume.resume(item_id)}
+        return {"ok": True, "resumed": True, "closed": [], "running": resume_game(item_id)}
     item = get(item_id)
     if not item.get("installed"):
         raise ApiError(f"{item['title']} isn't installed yet.")
     recents.touch(item)
+    gamesettings.apply(item_id)
     proc = None
     if not mock_enabled():
         source, ident = _split(item_id)
-        proc = apps.launch(item) if source == "app" else LAUNCHERS[source].launch(ident)
+        env = gamesettings.launch_env(item_id)
+        try:
+            proc = apps.launch(item, env) if source == "app" else LAUNCHERS[source].launch(ident, env)
+        except Exception:
+            gamesettings.restore()
+            raise
+        gamesettings.restore_when_done(proc, item_id)
     closed = resume.started(item, proc)
     return {"ok": True, "resumed": False, "closed": closed}
+
+
+def resume_game(item_id):
+    """Jump back into a paused game, with its Game settings switched on again."""
+    if resume.get(item_id):
+        gamesettings.apply(item_id)
+    return resume.resume(item_id)
 
 
 def install(item_id):

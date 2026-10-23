@@ -188,7 +188,7 @@ class GOG(Launcher):
             subprocess.run(["rm", "-rf", "--", path], check=False)
         save_json(self._installed_path(), installed)
 
-    def launch(self, game_id):
+    def launch(self, game_id, env=None):
         game_dir = load_json(self._installed_path(), {}).get(game_id)
         if not game_dir:
             raise ApiError("This game isn't installed.")
@@ -201,7 +201,7 @@ class GOG(Launcher):
         exe = Path(game_dir) / task["path"].replace("\\", "/")
         cwd = Path(game_dir) / task.get("workingDir", "").replace("\\", "/")
         args = task.get("arguments", "").split() if task.get("arguments") else []
-        env = proton.env_for("gog", game_id)
+        env = {**proton.env_for("gog", game_id), **(env or {})}
         owned = load_json(data_dir() / "gog-library.json", {}).get("games", [])
         title = next((g["title"] for g in owned if g["id"] == game_id), game_id)
         item_id = f"gog:{game_id}"

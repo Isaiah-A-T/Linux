@@ -4,12 +4,13 @@ import json
 import mimetypes
 import os
 import subprocess
+import threading
 import traceback
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import __version__, apps, art, capture, fun, jobs, library, mock, resume, saves, store, system, update, users
+from . import __version__, apps, art, capture, fun, gamesettings, jobs, library, mock, resume, saves, store, system, update, users
 from .util import ApiError, mock_enabled
 
 
@@ -89,8 +90,11 @@ ROUTES = {
     ("POST", "/api/library/launch"): lambda q, b: library.launch(b["id"]),
     ("POST", "/api/library/install"): lambda q, b: library.install(b["id"]),
     ("POST", "/api/library/uninstall"): lambda q, b: library.uninstall(b["id"]),
+    ("GET", "/api/game-settings"): lambda q, b: gamesettings.get(library.get(q.get("id", ""))["id"]),
+    ("POST", "/api/game-settings"): lambda q, b: gamesettings.update(library.get(b["id"])["id"], b),
+    ("POST", "/api/game-settings/restore"): lambda q, b: gamesettings.restore(),
     ("GET", "/api/running"): lambda q, b: resume.status(),
-    ("POST", "/api/running/resume"): lambda q, b: (resume.resume(b["id"]), resume.status())[1],
+    ("POST", "/api/running/resume"): lambda q, b: (library.resume_game(b["id"]), resume.status())[1],
     ("POST", "/api/running/close"): lambda q, b: resume.close(b["id"]),
     ("GET", "/api/library/compat"): lambda q, b: library.compat(q.get("id", "")),
     ("POST", "/api/library/compat"): lambda q, b: library.set_compat(b["id"], b.get("tool", "")),
@@ -241,6 +245,7 @@ def serve(port, ui_root, mode="session"):
     httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     httpd.daemon_threads = True
     if mode == "session":
+        threading.Thread(target=gamesettings.prepare, daemon=True).start()
         capture.start()
         resume.start(library.items() if mock_enabled() else None)
     print(f"lumend {__version__} ({mode}) on http://127.0.0.1:{port}/", flush=True)

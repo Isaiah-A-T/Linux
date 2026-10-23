@@ -50,6 +50,19 @@ you pick a different Proton for that game, or a custom build such as GE-Proton. 
 Wine prefix under `~/Games/Prefixes/`. Plain Wine is installed too, for the
 odd game that runs better outside Proton.
 
+**Game settings** (a game's details › Game settings) gives each game its own
+frame rate cap (30 to 120 FPS), power mode (Performance, Balanced, or Quiet
+and battery saver) and button layout (swap A/B, X/Y, bumpers and triggers, or
+remap any single button or turn it off). They switch on when the game starts
+and back off when you return to Lumen. The cap is set through gamescope, so
+it works for Steam games too; power modes use power-profiles-daemon and
+button layouts use InputPlumber.
+
+<p>
+  <img src="docs/screenshots/game-settings.png" width="49%" alt="Game settings">
+  <img src="docs/screenshots/game-settings-buttons.png" width="49%" alt="Button layout">
+</p>
+
 **Quick Resume.** Press the Guide button in a game and you're back on Home,
 with the game paused right where you left it: it uses no CPU or GPU while
 paused, and picking it again carries on from the same frame. Up to three
@@ -242,6 +255,9 @@ Not tested yet:
   downloading and launching games through Proton has only been exercised
   with mock data.
 - **Store installs** from Flathub and Snap on an installed system.
+- **Game settings** on real hardware: the gamescope frame cap, power modes
+  and InputPlumber button layouts have only been checked against mock data
+  and unit tests.
 - **System update** end to end: updating an installed system from the
   `[lumen]` repo, by hand or automatically. The automatic update script has
   only been run against stubbed pacman, NetworkManager and pgrep.
