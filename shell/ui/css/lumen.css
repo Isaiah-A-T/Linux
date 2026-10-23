@@ -408,6 +408,11 @@ svg.i { width: 1.5rem; height: 1.5rem; flex: none; stroke: currentColor; fill: n
   padding: 0.2rem 0.45rem; border-radius: 0.35rem; margin-top: 0.45rem; }
 .pill.flatpak { background: rgba(77, 163, 255, 0.18); color: #8cc4ff; }
 .pill.snap { background: rgba(255, 140, 70, 0.18); color: #ffb08a; }
+.pills { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.pill.rating { background: rgba(255, 255, 255, 0.1); color: var(--muted); }
+.pill.platinum, .pill.native, .pill.deck-verified { background: rgba(80, 220, 140, 0.18); color: #8ff0b8; }
+.pill.gold, .pill.deck-playable { background: rgba(255, 200, 60, 0.18); color: #ffd97a; }
+.pill.borked, .pill.deck-unsupported { background: rgba(255, 90, 90, 0.18); color: #ff9c9c; }
 .search-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr)); gap: 1.2rem; padding: 0.5rem 3.5rem; }
 .search-grid .app-card { width: auto; }
 .search-bar { display: flex; gap: 1rem; padding: 0 3.5rem 1rem; }

@@ -46,6 +46,64 @@ class SteamTest(unittest.TestCase):
         self.assertEqual(games["570"]["progress"], 25.0)
 
 
+class SteamPlayTest(unittest.TestCase):
+    CONFIG = ('"InstallConfigStore" { "Software" { "valve" { "Steam" { "AutoUpdateWindowEnabled" "0" '
+              '"CompatToolMapping" { "620" { "name" "proton_9" "config" "" "priority" "250" } } } } } }')
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.dir.name)
+        (self.root / "config").mkdir()
+        (self.root / "config" / "config.vdf").write_text(self.CONFIG)
+        tool = self.root / "compatibilitytools.d" / "GE-Proton10-4"
+        tool.mkdir(parents=True)
+        (tool / "compatibilitytool.vdf").write_text(
+            '"compatibilitytools" { "compat_tools" { "GE-Proton10-4" { "display_name" "GE-Proton 10-4" } } }')
+        patches = [mock.patch.object(steam, "running", return_value=False),
+                   mock.patch.object(steam, "steam_root", return_value=self.root),
+                   mock.patch.object(steam, "ratings", return_value={"protondb": "gold", "deck": "verified"})]
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def mapping(self):
+        cfg = vdf.load(self.root / "config" / "config.vdf")
+        return cfg["InstallConfigStore"]["Software"]["valve"]["Steam"]
+
+    def test_dumps_round_trips(self):
+        data = {"a": {"b": 'say "hi"', "c": {"d": "C:\\Games"}}}
+        self.assertEqual(vdf.loads(vdf.dumps(data)), data)
+
+    def test_enables_proton_for_all_titles_once_and_keeps_other_settings(self):
+        self.assertTrue(steam.enable_steam_play(self.root))
+        node = self.mapping()
+        self.assertEqual(node["CompatToolMapping"]["0"]["name"], "proton_experimental")
+        self.assertEqual(node["CompatToolMapping"]["620"]["name"], "proton_9")
+        self.assertEqual(node["AutoUpdateWindowEnabled"], "0")
+        self.assertTrue((self.root / "config" / "config.vdf.lumen-bak").exists())
+        self.assertFalse(steam.enable_steam_play(self.root))
+
+    def test_leaves_config_alone_while_steam_runs(self):
+        with mock.patch.object(steam, "running", return_value=True):
+            self.assertFalse(steam.enable_steam_play(self.root))
+        self.assertNotIn("0", self.mapping()["CompatToolMapping"])
+
+    def test_pick_and_clear_proton_per_game(self):
+        s = steam.Steam()
+        info = s.compat("620")
+        self.assertEqual(info["tool"], "proton_9")
+        self.assertIn({"id": "GE-Proton10-4", "name": "GE-Proton 10-4"}, info["tools"])
+        self.assertEqual(s.set_compat("1145360", "GE-Proton10-4")["tool"], "GE-Proton10-4")
+        self.assertEqual(self.mapping()["CompatToolMapping"]["1145360"]["priority"], "250")
+        self.assertEqual(s.set_compat("620", "")["tool"], "")
+        self.assertNotIn("620", self.mapping()["CompatToolMapping"])
+        with self.assertRaises(steam.ApiError):
+            s.set_compat("620", "made-up-proton")
+
+
 class GogTest(unittest.TestCase):
     def test_extract_code(self):
         url = "https://embed.gog.com/on_login_success?origin=client&code=abc123"

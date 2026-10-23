@@ -91,6 +91,8 @@ ROUTES = {
     ("GET", "/api/running"): lambda q, b: resume.status(),
     ("POST", "/api/running/resume"): lambda q, b: (resume.resume(b["id"]), resume.status())[1],
     ("POST", "/api/running/close"): lambda q, b: resume.close(b["id"]),
+    ("GET", "/api/library/compat"): lambda q, b: library.compat(q.get("id", "")),
+    ("POST", "/api/library/compat"): lambda q, b: library.set_compat(b["id"], b.get("tool", "")),
     ("GET", "/api/accounts"): lambda q, b: {"accounts": library.accounts()},
     ("POST", "/api/accounts/connect"): lambda q, b: {"accounts": library.connect(b["launcher"], b)},
     ("POST", "/api/accounts/disconnect"): lambda q, b: {"accounts": library.disconnect(b["launcher"])},

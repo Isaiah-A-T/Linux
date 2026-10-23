@@ -1,0 +1,22 @@
+Based on soniciso1/ps5-linux-loader issue #4: keep runtime PM and deep sleep
+off on the PS5's MediaTek MT7921, which otherwise powers the console off.
+
+diff --git a/drivers/net/wireless/mediatek/mt76/mt7921/init.c b/drivers/net/wireless/mediatek/mt76/mt7921/init.c
+index 8e77907..7761b14 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt7921/init.c
++++ b/drivers/net/wireless/mediatek/mt76/mt7921/init.c
+@@ -303,8 +303,13 @@ int mt7921_register_device(struct mt792x_dev *dev)
+ 	dev->pm.stats.last_wake_event = jiffies;
+ 	dev->pm.stats.last_doze_event = jiffies;
+ 
++	/* PS5: runtime PM and deep sleep on the MT7921 behind the Salina
++	 * southbridge take Ethernet, xHCI and Wi-Fi down with it (the console
++	 * powers off right after the firmware loads), so leave both off.
++	 */
+ 	if (!mt76_is_usb(&dev->mt76) &&
+-	    !is_mt7902(&dev->mt76)) {
++	    !is_mt7902(&dev->mt76) &&
++	    !IS_ENABLED(CONFIG_X86_PS5)) {
+ 		dev->pm.enable_user = true;
+ 		dev->pm.enable = true;
+ 		dev->pm.ds_enable_user = true;

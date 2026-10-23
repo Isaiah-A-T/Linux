@@ -65,7 +65,12 @@ airplane mode. Settings links to it instead of repeating those controls.
 
 * **Steam** runs its own client and Proton. Lumen reads installed games from
   `steamapps/appmanifest_*.acf` and hands launch and install to
-  `steam steam://rungameid/<id>` and `steam://install/<id>`.
+  `steam -silent steam://rungameid/<id>` and `steam://install/<id>`. lumend
+  sets Steam Play's default compat tool (`CompatToolMapping` "0" in
+  `config/config.vdf`) to Proton Experimental while Steam is closed, and
+  writes per-game Proton choices to the same table, closing Steam first
+  because it rewrites that file on exit. Custom Protons are read from
+  `compatibilitytools.d`.
 * **Epic** uses `legendary`, **GOG** uses `gogdl`. Both list the owned
   library, download into `~/Games/<store>/`, and launch through `umu-run`
   with GE-Proton. Each game gets its own prefix in `~/Games/Prefixes/`.

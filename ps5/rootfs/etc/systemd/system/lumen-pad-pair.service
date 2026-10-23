@@ -1,0 +1,13 @@
+# Pair a wireless controller by holding its pairing buttons, no screen
+# needed. See /usr/lib/lumen-ps5/pad-pair.
+[Unit]
+Description=Pair wireless game controllers automatically
+After=bluetooth.service
+Wants=bluetooth.service
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/lumen-ps5/pad-pair
+
+[Install]
+WantedBy=multi-user.target

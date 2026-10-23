@@ -1,0 +1,31 @@
+#!/bin/bash
+# Copies this boot's logs to the USB drive's FAT partition (lumen-logs/),
+# which Windows and macOS can read, so problems on the console can be
+# looked at from a PC. Run every minute by lumen-export-logs.timer.
+set -u
+
+mountpoint -q /boot/efi || exit 0
+out=/boot/efi/lumen-logs
+mkdir -p "$out"
+
+{
+	echo "== $(date -Is)  kernel $(uname -r)"
+	echo; echo "== Network"; nmcli -f DEVICE,TYPE,STATE,CONNECTION device 2>&1; ip -br addr 2>&1
+	echo; echo "== Wi-Fi firmware staged by the loader"; ls -l /boot/efi/lib/nxp 2>&1
+	ls -l /usr/lib/firmware/nxp 2>&1
+	echo; echo "== Bluetooth"; bluetoothctl show 2>&1 | head -20; bluetoothctl devices 2>&1
+	echo; echo "== Input devices"; grep -E '^N:' /proc/bus/input/devices 2>&1
+	echo; echo "== USB"; lsusb 2>&1
+	echo; echo "== PCI"; lspci -nnk 2>&1
+	echo; echo "== Modules"; lsmod 2>&1
+	echo; echo "== Failed units"; systemctl --failed --no-pager 2>&1
+	echo; echo "== Sessions"; loginctl list-sessions --no-pager 2>&1
+} > "$out/status.txt"
+
+journalctl -b --no-pager 2>&1 | tail -n 30000 > "$out/journal.txt"
+dmesg 2>&1 | tail -n 5000 > "$out/dmesg.txt"
+# Power-on screen and setup.
+cp -f /tmp/lumen-installer/session.log "$out/installer-session.log" 2>/dev/null
+cp -f /root/.cache/calamares/session.log "$out/calamares.log" 2>/dev/null
+sync -f "$out" 2>/dev/null
+exit 0
