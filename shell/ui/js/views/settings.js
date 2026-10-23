@@ -9,6 +9,13 @@ import { openQuickSettings } from "../quick.js";
 import { pollJobs, setHero, state, subscribe } from "../state.js";
 
 const UPDATE_JOB = "system:update";
+const AUTO_JOB = "system:auto-update";
+
+const AUTO_MODES = [
+  ["install", "Install automatically"],
+  ["download", "Download only"],
+  ["off", "Off"],
+];
 
 function daysAgo(t) {
   if (!t) return "Never";
@@ -16,12 +23,36 @@ function daysAgo(t) {
   return d < 1 ? "Today" : d === 1 ? "Yesterday" : `${d} days ago`;
 }
 
-function since(t) {
-  const s = Date.now() / 1000 - t;
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.round(s / 60)} min ago`;
-  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+function timeAgo(t) {
+  const m = Math.floor((Date.now() / 1000 - t) / 60);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m} min ago`;
+  if (m < 24 * 60) return `${Math.floor(m / 60)} h ago`;
   return daysAgo(t).toLowerCase();
+}
+
+function plural(n, word) {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+// What the last automatic run did, for the "Automatic updates" line.
+function autoSummary(a) {
+  if (!a || a.mode === "off") return "Off";
+  if (a.running && a.state === "checking") return "Checking now";
+  if (a.running && a.state === "downloading") return `Downloading ${plural(a.count, "update")}`;
+  if (a.running && a.state === "installing") return `Installing ${plural(a.count, "update")}`;
+  if (a.running && a.state === "waiting") return `${plural(a.count, "update")} ready · ${a.message}`;
+  if (!a.time) return "Checks every few hours";
+  const when = timeAgo(a.time);
+  return {
+    installed: `Installed ${plural(a.count, "update")} ${when}`,
+    downloaded: `${plural(a.count, "update")} downloaded ${when} · ready to install`,
+    current: `Up to date · checked ${when}`,
+    waiting: `${plural(a.count, "update")} ready · ${a.message}`,
+    failed: `Last try failed ${when}`,
+    offline: `No connection ${when} · tries again later`,
+    skipped: `${a.message} ${when}`,
+  }[a.state] || `Checked ${when}`;
 }
 
 // Settings › System update: pacman (the OS and the Lumen shell), then Flatpak
@@ -53,18 +84,43 @@ function updatePage() {
     }
   }
 
+  async function setAuto(mode) {
+    if (info?.auto?.mode === mode) return;
+    try {
+      info = await post("update/auto", { mode });
+    } catch (e) {
+      toast(e.message, icon("info"));
+    }
+    paint();
+  }
+
+  // A restart drops a PS5 back into its own system software, so there it's
+  // "turn off, then start Lumen again".
+  const rebootNeeded = () => (job()?.state === "done" && job().reboot) || (!job() && info?.reboot);
+  const restartText = () => (info?.ps5 ? "Turn off, then start Lumen again from your PS5" : "The new system and shell start after a restart.");
+
   function headline() {
     const j = job();
+    const a = info?.auto;
     if (j?.state === "running") {
       return [h("b", {}, `Updating… ${Math.round(j.progress)}%`),
         h("div.meter", h("i", { style: { width: `${j.progress}%` } })),
         h("small", {}, [j.message, j.detail].filter(Boolean).join(" · "))];
     }
-    if (j?.state === "done" && j.reboot) return [h("b", {}, "Restart to finish updating"), h("small", {}, "The new system and shell start after a restart.")];
+    if (a?.running && a.state === "installing") {
+      return [h("b", {}, "Installing updates in the background…"), h("div.meter.busy", h("i")),
+        h("small", {}, "Keep Lumen on until this finishes. You can keep playing.")];
+    }
+    if (a?.running && a.state === "downloading") {
+      return [h("b", {}, `Downloading ${plural(a.count, "update")} in the background…`), h("div.meter.busy", h("i"))];
+    }
+    if (rebootNeeded()) return [h("b", {}, info?.ps5 ? "Turn Lumen off and on to finish updating" : "Restart to finish updating"), h("small", {}, restartText())];
     if (j?.state === "done") return [h("b", {}, "Lumen OS is up to date")];
     if (j?.state === "failed") return [h("b", {}, "The update didn't finish"), h("small", {}, j.message || j.detail || "")];
     if (checking) return [h("b", {}, "Checking for updates…")];
     if (info?.error) return [h("b", {}, "Couldn't check for updates"), h("small", {}, info.error)];
+    if (!info?.checked && a?.state === "downloaded" && a.count) return [h("b", {}, `${plural(a.count, "update")} ready to install`), h("small", {}, "Already downloaded, so installing is quick.")];
+    if (!info?.checked && a?.state === "current" && !a.running) return [h("b", {}, "Lumen OS is up to date")];
     if (!info?.checked) return [h("b", {}, "Check for updates or update now")];
     const n = info.packages.length + info.apps;
     if (!n) return [h("b", {}, "Lumen OS is up to date")];
@@ -77,26 +133,41 @@ function updatePage() {
   function paint(refocus = false) {
     const keep = box.querySelector(".focused")?.dataset.key;
     const j = job();
-    const running = j?.state === "running";
+    const a = info?.auto;
+    const running = j?.state === "running" || (a?.running && a.state === "installing");
     const live = state.info.live;
+    const reboot = rebootNeeded();
     const actions = [];
-    if (j?.state === "done" && j.reboot) {
-      actions.push(h("button.btn.primary.f.ring", { "data-key": "restart", onclick: () => post("power", { action: "reboot" }) },
-        icon("restart"), "Restart now"));
+    if (reboot) {
+      const [action, ic, label] = info?.ps5 ? ["poweroff", "power", "Turn off now"] : ["reboot", "restart", "Restart now"];
+      actions.push(h("button.btn.primary.f.ring", { "data-key": "restart", onclick: () => post("power", { action }).catch((e) => toast(e.message, icon("info"))) },
+        icon(ic), label));
     }
     actions.push(
-      h(`button.btn.f.ring${j?.reboot && j.state === "done" ? "" : ".primary"}`,
+      h(`button.btn.f.ring${reboot ? "" : ".primary"}`,
         { "data-key": "start", disabled: running || live || !info?.available, onclick: start }, icon("update"), "Update now"),
       h("button.btn.f.ring", { "data-key": "check", disabled: running || checking || live || !info?.available, onclick: check },
         icon("search"), "Check for updates"));
+    const modes = h("div.tabs", { "data-group": true, style: { padding: 0, flexWrap: "wrap" } },
+      AUTO_MODES.map(([mode, label]) => h(`button.tab.f.ring${(a?.mode || "install") === mode ? ".sel" : ""}`,
+        { "data-key": `auto-${mode}`, disabled: live || !info?.available, onclick: () => setAuto(mode) }, label)));
     box.replaceChildren(
       h("div.job", headline()),
       // Buttons right under the status so → from the nav lands on them.
       h("div.actions", { "data-group": true, style: { display: "flex", gap: "1rem", flexWrap: "wrap", margin: "1.4rem 0" } }, actions),
       h("div.kv",
         "Lumen", h("b", {}, state.info.version || ""),
-        "Last updated", h("b", {}, daysAgo(info?.last_upgrade))),
-      h("p", { style: { color: "var(--muted)", lineHeight: 1.6, marginTop: "1.6rem" } },
+        "Last updated", h("b", {}, daysAgo(info?.last_upgrade)),
+        "In the background", h("b", {}, live ? "After you install Lumen OS" : autoSummary(a))),
+      h("h3", { style: { margin: "1.8rem 0 .8rem" } }, "Automatic updates"),
+      modes,
+      h("p", { style: { color: "var(--muted)", lineHeight: 1.6, marginTop: "1rem" } },
+        (a?.mode || "install") === "install"
+          ? "Lumen checks for updates every few hours and installs them in the background, never while a game is running. You'll be asked to restart when a new kernel or shell needs it."
+          : a.mode === "download"
+            ? "Lumen downloads updates in the background. Install them here with Update now."
+            : "Lumen won't look for updates by itself. Use Update now when you want them."),
+      h("p", { style: { color: "var(--muted)", lineHeight: 1.6, marginTop: "1rem" } },
         live ? "Install Lumen OS to get updates. The live system resets when it restarts."
           : info && !info.available ? "The update helper isn't installed on this system."
             : "Updates the system, the Lumen shell, and your Flatpak and Snap apps without reinstalling. Your games, saves and settings stay put. Steam, Epic and GOG games update from the Library."));
@@ -110,8 +181,17 @@ function updatePage() {
   }
 
   let last = "";
+  let lastAuto = "";
   const unsub = subscribe((k) => {
     if (k !== "jobs" || !box.isConnected) return;
+    // Background (automatic) updates show up in the jobs poll too; refetch
+    // the status whenever one starts, moves on or finishes.
+    const auto = (state.jobs || []).find((x) => x.item_id === AUTO_JOB);
+    const autoSig = auto ? `${auto.state}:${auto.message}` : "";
+    if (autoSig !== lastAuto) {
+      lastAuto = autoSig;
+      get("update").then((u) => { info = u; paint(); }).catch(() => {});
+    }
     const j = job();
     const sig = j ? `${j.id}:${j.state}:${j.progress}:${j.message}:${j.detail}` : "";
     if (sig === last) return;
@@ -166,7 +246,7 @@ function savesPage() {
           onclick: () => act(async () => { await post("saves/sync"); pollJobs(); }) },
           icon("update"),
           h("div.grow", h("b", {}, syncing ? `Syncing… ${Math.round(j.progress)}%` : "Sync now"),
-            h("small", {}, j && !syncing ? j.message : saves.last_sync ? `Last synced ${since(saves.last_sync)}` : "Not synced yet")))),
+            h("small", {}, j && !syncing ? j.message : saves.last_sync ? `Last synced ${timeAgo(saves.last_sync)}` : "Not synced yet")))),
       h("div.kv", { style: { margin: "1rem 0 0.4rem" } },
         ...saves.stores.flatMap((st) => [st.name, h("b", {}, st.connected ? st.how : "Not connected")])),
       h("div.section-label", { style: { marginTop: "2rem" } }, "Screenshots and clips"),

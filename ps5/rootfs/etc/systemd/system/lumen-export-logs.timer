@@ -1,0 +1,10 @@
+[Unit]
+Description=Copy logs to the USB drive every minute
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=1min
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

@@ -39,5 +39,10 @@ const base = process.env.LUMEN_URL || "http://127.0.0.1:7777/";
   await shot("06-library-row-3");
   await key("Enter");
   await shot("07-game-details");
+
+  // Mock mode starts with the first game (Hades) paused in Quick Resume.
+  await fresh();
+  await key("ContextMenu");
+  await shot("08-quick-resume");
   await browser.close();
 })();

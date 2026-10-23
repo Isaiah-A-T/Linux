@@ -5,7 +5,7 @@ import os
 import subprocess
 import time
 
-from .. import jobs, saves
+from .. import jobs, resume, saves
 from ..util import ApiError, data_dir, games_dir, have, load_json, run, save_json
 from . import proton
 from .base import Launcher
@@ -134,11 +134,13 @@ class Epic(Launcher):
         cmd = ["legendary", "launch", game_id, "--no-wine", "--wrapper", " ".join(wrapper)]
         env = proton.env_for("egs", game_id)
         title = self._installed().get(game_id, {}).get("title") or game_id
-        saves.play(f"epic:{game_id}", title, env["WINEPREFIX"],
-                   lambda: subprocess.Popen(cmd, env=env, start_new_session=True,
-                                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                            cwd=os.path.expanduser("~")),
-                   lambda direction: self.sync_saves(game_id, direction))
+        item_id = f"epic:{game_id}"
+        return saves.play(item_id, title, env["WINEPREFIX"],
+                          lambda: subprocess.Popen(cmd, env=env, start_new_session=True,
+                                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                                   cwd=os.path.expanduser("~")),
+                          lambda direction: self.sync_saves(game_id, direction),
+                          on_start=lambda proc: resume.attach(item_id, proc))
 
     def installed_ids(self):
         return list(self._installed())

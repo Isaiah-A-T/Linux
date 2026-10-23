@@ -1,0 +1,6 @@
+# PS5 consoles with the MediaTek combo chip: its Bluetooth (0e8d:3603)
+# exposes a second adapter on interfaces 3 and 4 that stops hci0 from
+# working, and it stalls with USB autosuspend. From WizGery/ps5-mediatek-fixes.
+ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="0e8d", ATTRS{idProduct}=="3603", ATTR{bInterfaceNumber}=="03", ATTR{authorized}="0"
+ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="0e8d", ATTRS{idProduct}=="3603", ATTR{bInterfaceNumber}=="04", ATTR{authorized}="0"
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="0e8d", ATTR{idProduct}=="3603", TEST=="power/control", ATTR{power/control}="on"

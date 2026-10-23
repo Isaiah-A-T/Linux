@@ -1,0 +1,7 @@
+[Unit]
+Description=Copy logs to the USB drive's boot partition
+RequiresMountsFor=/boot/efi
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/lumen-ps5/export-logs

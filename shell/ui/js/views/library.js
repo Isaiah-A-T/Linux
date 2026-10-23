@@ -3,7 +3,7 @@
 import { get } from "../api.js";
 import { h, icon, SOURCE_LABEL } from "../dom.js";
 import { focus, focusFirst, onFocus } from "../focus.js";
-import { install, jobFor, launch, openDetails } from "../details.js";
+import { install, jobFor, launch, openDetails, runningBadge } from "../details.js";
 import { setGameHero, subscribe } from "../state.js";
 import { openAccountSheet } from "./accounts.js";
 
@@ -55,7 +55,8 @@ export function render(ctx, params = {}) {
       h("span.src", {}, item.kind === "app" ? "App" : SOURCE_LABEL[item.source]),
       !item.installed && progress == null ? h("span.dl", icon("download")) : null,
       progress != null ? h("div.bar", h("i", { style: { width: `${progress}%` } })) : null,
-      h("span.label", {}, item.title));
+      h("span.label", {}, item.title),
+      runningBadge(item));
     t._item = item;
     return t;
   }
@@ -114,7 +115,7 @@ export function render(ctx, params = {}) {
   }
 
   const unsub = subscribe((key) => {
-    if (key === "jobs" && tab !== "accounts") {
+    if ((key === "jobs" || key === "running") && tab !== "accounts") {
       const keep = document.querySelector(".focused")?._item?.id;
       paintBody();
       const again = keep && [...body.querySelectorAll(".tile")].find((t) => t._item?.id === keep);

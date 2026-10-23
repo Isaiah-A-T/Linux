@@ -86,20 +86,23 @@ def status():
 # --- Play sessions -----------------------------------------------------------
 
 
-def play(item_id, title, prefix, start, sync):
+def play(item_id, title, prefix, start, sync, on_start=None):
     """Run a game with its saves synced on both sides.
 
     start() launches the game and returns its Popen. sync(direction) syncs
-    with "down" or "up" and returns True on success. Returns right away; the
-    sync and the wait happen on a thread.
+    with "down" or "up" and returns True on success. Without cloud saves the
+    game starts now and its Popen is returned. With them this returns None
+    right away; the sync and the wait happen on a thread, which hands the
+    Popen to on_start once the game is up.
     """
     if not enabled() or mock_enabled():
-        start()
-        return
+        return start()
 
     def session():
         _step(item_id, title, sync, "down")
         proc = start()
+        if on_start:
+            on_start(proc)
         proc.wait()
         wait_prefix_idle(prefix)
         _step(item_id, title, sync, "up")

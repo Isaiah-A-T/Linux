@@ -6,6 +6,8 @@ import shlex
 import subprocess
 from pathlib import Path
 
+from .util import session_env
+
 _FIELD_CODES = {"%f", "%F", "%u", "%U", "%d", "%D", "%n", "%N", "%i", "%c", "%k", "%v", "%m"}
 
 # Our own session tools and launchers we wrap ourselves stay out of the list.
@@ -128,5 +130,5 @@ def exec_args(exec_line):
 
 
 def launch(item):
-    subprocess.Popen(exec_args(item["_exec"]), start_new_session=True,
+    return subprocess.Popen(exec_args(item["_exec"]), env=session_env(), start_new_session=True,
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

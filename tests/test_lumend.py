@@ -9,7 +9,7 @@ from unittest import mock
 
 os.environ.setdefault("XDG_DATA_HOME", tempfile.mkdtemp())
 
-from lumend import art, capture, fun, jobs, recents, saves, store, system, update  # noqa: E402
+from lumend import art, capture, fun, gamescope, jobs, pads, recents, resume, saves, store, system, update  # noqa: E402
 from lumend.launchers import gog, steam, vdf  # noqa: E402
 
 
@@ -45,6 +45,64 @@ class SteamTest(unittest.TestCase):
         self.assertEqual(games["620"]["last_played"], 100)
         self.assertFalse(games["570"]["installed"])
         self.assertEqual(games["570"]["progress"], 25.0)
+
+
+class SteamPlayTest(unittest.TestCase):
+    CONFIG = ('"InstallConfigStore" { "Software" { "valve" { "Steam" { "AutoUpdateWindowEnabled" "0" '
+              '"CompatToolMapping" { "620" { "name" "proton_9" "config" "" "priority" "250" } } } } } }')
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.dir.name)
+        (self.root / "config").mkdir()
+        (self.root / "config" / "config.vdf").write_text(self.CONFIG)
+        tool = self.root / "compatibilitytools.d" / "GE-Proton10-4"
+        tool.mkdir(parents=True)
+        (tool / "compatibilitytool.vdf").write_text(
+            '"compatibilitytools" { "compat_tools" { "GE-Proton10-4" { "display_name" "GE-Proton 10-4" } } }')
+        patches = [mock.patch.object(steam, "running", return_value=False),
+                   mock.patch.object(steam, "steam_root", return_value=self.root),
+                   mock.patch.object(steam, "ratings", return_value={"protondb": "gold", "deck": "verified"})]
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def mapping(self):
+        cfg = vdf.load(self.root / "config" / "config.vdf")
+        return cfg["InstallConfigStore"]["Software"]["valve"]["Steam"]
+
+    def test_dumps_round_trips(self):
+        data = {"a": {"b": 'say "hi"', "c": {"d": "C:\\Games"}}}
+        self.assertEqual(vdf.loads(vdf.dumps(data)), data)
+
+    def test_enables_proton_for_all_titles_once_and_keeps_other_settings(self):
+        self.assertTrue(steam.enable_steam_play(self.root))
+        node = self.mapping()
+        self.assertEqual(node["CompatToolMapping"]["0"]["name"], "proton_experimental")
+        self.assertEqual(node["CompatToolMapping"]["620"]["name"], "proton_9")
+        self.assertEqual(node["AutoUpdateWindowEnabled"], "0")
+        self.assertTrue((self.root / "config" / "config.vdf.lumen-bak").exists())
+        self.assertFalse(steam.enable_steam_play(self.root))
+
+    def test_leaves_config_alone_while_steam_runs(self):
+        with mock.patch.object(steam, "running", return_value=True):
+            self.assertFalse(steam.enable_steam_play(self.root))
+        self.assertNotIn("0", self.mapping()["CompatToolMapping"])
+
+    def test_pick_and_clear_proton_per_game(self):
+        s = steam.Steam()
+        info = s.compat("620")
+        self.assertEqual(info["tool"], "proton_9")
+        self.assertIn({"id": "GE-Proton10-4", "name": "GE-Proton 10-4"}, info["tools"])
+        self.assertEqual(s.set_compat("1145360", "GE-Proton10-4")["tool"], "GE-Proton10-4")
+        self.assertEqual(self.mapping()["CompatToolMapping"]["1145360"]["priority"], "250")
+        self.assertEqual(s.set_compat("620", "")["tool"], "")
+        self.assertNotIn("620", self.mapping()["CompatToolMapping"])
+        with self.assertRaises(steam.ApiError):
+            s.set_compat("620", "made-up-proton")
 
 
 class GogTest(unittest.TestCase):
@@ -142,6 +200,71 @@ class UpdateTest(unittest.TestCase):
         self.assertEqual(seen["state"], "running")  # the hook runs before the job finishes
 
 
+class AutoUpdateTest(unittest.TestCase):
+    def test_parse_auto_status(self):
+        st = update.parse_auto_status("state=waiting\ntime=1792485000\ncount=12\n"
+                                      "message=Will install after you finish playing\n")
+        self.assertEqual(st["state"], "waiting")
+        self.assertEqual(st["time"], 1792485000)
+        self.assertEqual(st["count"], 12)
+        self.assertEqual(st["message"], "Will install after you finish playing")
+        self.assertEqual(update.parse_auto_status("count=x")["count"], 0)
+
+    def test_auto_mode_defaults_to_install(self):
+        self.assertEqual(update.auto_mode("/nonexistent/update.conf"), "install")
+        with tempfile.NamedTemporaryFile("w", suffix=".conf", delete=False) as f:
+            f.write('LUMEN_REPO_URL=https://example.com\nAUTO_UPDATE="download"\n')
+        try:
+            self.assertEqual(update.auto_mode(f.name), "download")
+        finally:
+            os.unlink(f.name)
+
+    def test_local_version_does_not_match_longer_names(self):
+        with tempfile.TemporaryDirectory() as d:
+            for entry in ("lumen-0.1.0.r20261022.163000-1", "lumen-ps5-ntsync-1-1", "linux-ps5-6.15.4-1"):
+                os.mkdir(os.path.join(d, entry))
+            with mock.patch.object(update, "PACMAN_LOCAL", d):
+                self.assertEqual(update._local_version("lumen"), "0.1.0.r20261022.163000-1")
+                self.assertEqual(update._local_version("linux-ps5"), "6.15.4-1")
+                self.assertIsNone(update._local_version("linux"))
+                self.assertTrue(update.is_ps5())
+
+    def test_a_busy_state_without_the_lock_is_stale(self):
+        with tempfile.NamedTemporaryFile("w", delete=False) as f:
+            f.write("state=installing\ntime=1\ncount=3\nmessage=\n")
+        try:
+            with mock.patch.object(update, "AUTO_STATUS", f.name), \
+                    mock.patch.object(update, "LOCK", "/nonexistent/lock"), \
+                    mock.patch.object(update, "AUTO_CONF", "/nonexistent/update.conf"):
+                st = update.auto_status()
+        finally:
+            os.unlink(f.name)
+        self.assertFalse(st["running"])
+        self.assertEqual(st["state"], "")
+        self.assertEqual(st["mode"], "install")
+
+    def test_held_lock_means_running(self):
+        import fcntl
+        with tempfile.NamedTemporaryFile("w", delete=False) as lock, \
+                tempfile.NamedTemporaryFile("w", delete=False) as status:
+            status.write("state=downloading\ntime=1\ncount=3\nmessage=\n")
+        holder = open(lock.name, "w")
+        fcntl.flock(holder, fcntl.LOCK_EX)
+        try:
+            with mock.patch.object(update, "AUTO_STATUS", status.name), \
+                    mock.patch.object(update, "LOCK", lock.name), \
+                    mock.patch.object(update, "reboot_needed", lambda: False):
+                self.assertTrue(update.auto_status()["running"])
+                bg = update.background_jobs()
+        finally:
+            holder.close()
+            os.unlink(lock.name)
+            os.unlink(status.name)
+        self.assertEqual(len(bg), 1)
+        self.assertEqual(bg[0]["state"], "running")
+        self.assertEqual(bg[0]["message"], "Downloading 3 updates")
+
+
 class RecentsTest(unittest.TestCase):
     def test_home_is_capped_at_15_and_ordered(self):
         now = time.time()
@@ -157,6 +280,109 @@ class RecentsTest(unittest.TestCase):
         items = [{"id": "a", "installed": False, "last_played": 10}, {"id": "b", "installed": True, "last_played": 5}]
         with mock.patch.object(recents, "load", return_value=[{"id": "a", "last_played": 20}]):
             self.assertEqual([i["id"] for i in recents.home_items(items)], ["b"])
+
+
+class QuickResumeTest(unittest.TestCase):
+    def setUp(self):
+        resume._entries.clear()
+        resume._front["id"] = None
+        self.sent = []
+        # pid: (ppid, sid, state). 100 is a game whose wineserver (102)
+        # left the tree but kept the session; 200 is Steam's reaper for 620.
+        self.procs = {100: (1, 100, "S"), 101: (100, 100, "S"), 102: (1, 100, "S"), 103: (101, 100, "Z"),
+                      200: (50, 50, "S"), 201: (200, 50, "S"), 300: (1, 300, "S"), 400: (1, 400, "S"),
+                      500: (1, 500, "S")}
+        patches = [
+            mock.patch.object(resume, "processes", lambda: self.procs),
+            mock.patch.object(resume, "_cmdline", lambda pid: [b"/x/reaper", b"SteamLaunch", b"AppId=620"] if pid == 200 else []),
+            mock.patch.object(resume.os, "kill", lambda pid, sig: self.sent.append((pid, sig))),
+            mock.patch.object(resume.threading, "Thread", mock.MagicMock()),
+            mock.patch.object(resume, "gamescope", mock.MagicMock()),
+            mock.patch.dict(os.environ, {"LUMEN_MOCK": "0"}),
+        ]
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+
+    def game(self, item_id, pid, source="epic"):
+        item = {"id": item_id, "title": item_id, "kind": "game", "source": source, "art": {}}
+        return resume.started(item, mock.Mock(pid=pid) if pid else None)
+
+    def test_members_follow_session_and_tree_and_skip_zombies(self):
+        self.assertEqual(resume.members({"pid": 100, "sid": 100}, self.procs), {100, 101, 102})
+
+    def test_steam_games_are_found_through_the_reaper(self):
+        self.game("steam:620", None, source="steam")
+        self.assertEqual(resume.members(resume.get("steam:620"), self.procs), {200, 201})
+
+    def test_starting_another_game_pauses_the_one_on_screen(self):
+        self.game("epic:a", 100)
+        self.game("epic:b", 300)
+        st = resume.status()
+        self.assertEqual(st["front"], "epic:b")
+        self.assertEqual({i["id"]: i["state"] for i in st["items"]}, {"epic:a": "paused", "epic:b": "running"})
+        self.assertEqual(sorted(p for p, sig in self.sent if sig == resume.signal.SIGSTOP), [100, 101, 102])
+
+    def test_resume_continues_the_game(self):
+        self.game("epic:a", 100)
+        resume.go_home()
+        self.sent.clear()
+        resume.resume("epic:a")
+        self.assertEqual(resume.status()["front"], "epic:a")
+        self.assertEqual(sorted(p for p, sig in self.sent if sig == resume.signal.SIGCONT), [100, 101, 102])
+
+    def test_oldest_paused_game_is_closed_past_the_limit(self):
+        for item_id, pid in (("epic:a", 100), ("epic:b", 300), ("epic:c", 400), ("epic:d", 500)):
+            closed = self.game(item_id, pid)
+        self.assertEqual(closed, ["epic:a"])
+        self.assertIsNone(resume.get("epic:a"))
+        self.assertEqual(len(resume.status()["items"]), resume.LIMIT)
+
+    def test_game_started_after_cloud_saves_is_attached_late(self):
+        self.game("epic:a", None)
+        self.assertIsNotNone(resume.get("epic:a"))  # kept while saves download
+        resume.go_home()
+        resume.attach("epic:a", mock.Mock(pid=100))
+        self.assertEqual(resume.members(resume.get("epic:a"), self.procs), {100, 101, 102})
+        self.assertEqual(sorted(p for p, sig in self.sent if sig == resume.signal.SIGSTOP), [100, 101, 102])
+
+    def test_games_that_quit_are_forgotten(self):
+        self.game("epic:a", 300)
+        del self.procs[300]
+        self.assertEqual(resume.status(), {"front": None, "limit": resume.LIMIT, "items": []})
+
+    def test_apps_keep_running_when_you_go_home(self):
+        resume.started({"id": "app:x", "title": "X", "kind": "app", "source": "app"}, mock.Mock(pid=300))
+        resume.go_home()
+        self.assertEqual(resume.status()["items"][0]["state"], "running")
+        self.assertEqual(self.sent, [])
+
+
+class GuideTest(unittest.TestCase):
+    def test_capability_bitmap(self):
+        bits = 64 * 5
+        guide = 1 << pads.BTN_MODE
+        words = [f"{guide >> (64 * i) & (2 ** 64 - 1):x}" for i in reversed(range(bits // 64))]
+        self.assertTrue(pads.has_guide(" ".join(words)))
+        # A keyboard: plenty of keys, no gamepad buttons.
+        self.assertFalse(pads.has_guide("fffffffffffffffe"))
+        self.assertFalse(pads.has_guide("0"))
+
+    def test_guide_fires_on_release_but_not_in_combinations(self):
+        hits = []
+        w = pads.GuideWatcher(lambda: hits.append(1))
+        w.feed(3, pads.EV_KEY, pads.BTN_MODE, 1)
+        w.feed(3, pads.EV_KEY, pads.BTN_MODE, 0)
+        self.assertEqual(hits, [1])
+        w.feed(3, pads.EV_KEY, pads.BTN_MODE, 1)
+        w.feed(3, pads.EV_KEY, 0x134, 1)  # Y
+        w.feed(3, pads.EV_KEY, pads.BTN_MODE, 0)
+        self.assertEqual(hits, [1])
+
+    def test_gamescope_window_list(self):
+        text = "GAMESCOPE_FOCUSABLE_WINDOWS = 4194307, 769, 1200, 6291458, 0, 3400\n"
+        self.assertEqual(gamescope.parse_windows(text), [(4194307, 769, 1200), (6291458, 0, 3400)])
+        self.assertEqual(gamescope.parse_windows(""), [])
 
 
 class GreetdTest(unittest.TestCase):

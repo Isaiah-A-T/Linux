@@ -8,7 +8,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from .. import jobs, saves
+from .. import jobs, resume, saves
 from ..util import ApiError, data_dir, games_dir, have, load_json, run, save_json
 from . import proton
 from .base import Launcher
@@ -204,11 +204,13 @@ class GOG(Launcher):
         env = proton.env_for("gog", game_id)
         owned = load_json(data_dir() / "gog-library.json", {}).get("games", [])
         title = next((g["title"] for g in owned if g["id"] == game_id), game_id)
-        saves.play(f"gog:{game_id}", title, env["WINEPREFIX"],
-                   lambda: subprocess.Popen([*wrapper, str(exe), *args], cwd=str(cwd), env=env,
-                                            start_new_session=True, stdout=subprocess.DEVNULL,
-                                            stderr=subprocess.DEVNULL),
-                   lambda direction: self.sync_saves(game_id, direction))
+        item_id = f"gog:{game_id}"
+        return saves.play(item_id, title, env["WINEPREFIX"],
+                          lambda: subprocess.Popen([*wrapper, str(exe), *args], cwd=str(cwd), env=env,
+                                                   start_new_session=True, stdout=subprocess.DEVNULL,
+                                                   stderr=subprocess.DEVNULL),
+                          lambda direction: self.sync_saves(game_id, direction),
+                          on_start=lambda proc: resume.attach(item_id, proc))
 
     def installed_ids(self):
         return list(load_json(self._installed_path(), {}))
