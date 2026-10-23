@@ -8,7 +8,7 @@ from unittest import mock
 
 os.environ.setdefault("XDG_DATA_HOME", tempfile.mkdtemp())
 
-from lumend import art, jobs, recents, store, system, update  # noqa: E402
+from lumend import art, gamesettings, jobs, recents, store, system, update  # noqa: E402
 from lumend.launchers import gog, steam, vdf  # noqa: E402
 
 
@@ -247,3 +247,55 @@ class ArtTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GameSettingsTest(unittest.TestCase):
+    def setUp(self):
+        gamesettings._path().unlink(missing_ok=True)
+        gamesettings._active.update(id=None, power=None, fps=False, remap=False)
+
+    def test_update_validates_and_drops_defaults(self):
+        got = gamesettings.update("epic:Control", {"fps": 40, "power": "battery",
+                                                   "remap": {"a": "b", "b": "a", "x": "x", "zz": "a", "y": "off"}})
+        self.assertEqual(got["settings"], {"fps": 40, "power": "battery", "remap": {"a": "b", "b": "a", "y": "off"}})
+        with self.assertRaises(Exception):
+            gamesettings.update("epic:Control", {"fps": 33})
+        gamesettings.update("epic:Control", {"fps": None, "power": "default", "remap": {}})
+        self.assertNotIn("epic:Control", gamesettings._all())
+
+    def test_launch_env_caps_dxvk_and_vkd3d(self):
+        self.assertEqual(gamesettings.launch_env("gog:1"), {})
+        gamesettings.update("gog:1", {"fps": 30})
+        self.assertEqual(gamesettings.launch_env("gog:1"), {"DXVK_FRAME_RATE": "30", "VKD3D_FRAME_RATE": "30"})
+
+    def test_profile_yaml(self):
+        self.assertIn("mapping: []", gamesettings.profile_yaml(None, {}))
+        text = gamesettings.profile_yaml("steam:620", {"lt": "a", "b": "off"})
+        self.assertIn('name: Lumen "steam:620"', text)
+        # Listed in button order: B before LT.
+        self.assertLess(text.index("button: East"), text.index("name: LeftTrigger"))
+        self.assertIn("    target_events: []", text)
+        self.assertIn("          button: South", text)
+
+    def test_apply_then_restore_puts_the_power_mode_back(self):
+        gamesettings.update("steam:620", {"fps": 60, "power": "performance"})
+        calls = []
+
+        def fake_run(cmd, **kw):
+            calls.append(cmd)
+            return "balanced\n" if cmd[:2] == ["powerprofilesctl", "get"] else ""
+
+        with mock.patch.dict(os.environ, {"LUMEN_MOCK": "0"}), \
+                mock.patch.object(gamesettings, "run", side_effect=fake_run), \
+                mock.patch.object(gamesettings, "have", return_value=True):
+            gamesettings.apply("steam:620")
+            self.assertEqual(gamesettings.active(), "steam:620")
+            self.assertIn(["powerprofilesctl", "set", "performance"], calls)
+            self.assertTrue(any(c[0] == "xprop" and c[-1] == "60" for c in calls))
+            calls.clear()
+            self.assertTrue(gamesettings.restore()["restored"])
+            self.assertIn(["powerprofilesctl", "set", "balanced"], calls)
+            self.assertTrue(any(c[0] == "xprop" and c[-1] == "0" for c in calls))
+            # Buttons weren't changed, so InputPlumber is left alone.
+            self.assertFalse(any(c[0] == "busctl" for c in calls))
+            self.assertFalse(gamesettings.restore()["restored"])

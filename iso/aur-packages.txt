@@ -2,4 +2,6 @@
 # official repos.
 legendary
 umu-launcher
+# Per-game button layouts (Game settings)
+inputplumber
 snapd

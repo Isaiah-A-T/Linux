@@ -40,6 +40,16 @@ check() {
 	pacman -Qu --dbpath "$db" || [[ $? -eq 1 ]]
 }
 
+# Services newer shell features rely on, for systems installed before them.
+enable_services() {
+	local unit
+	for unit in inputplumber.service power-profiles-daemon.service; do
+		if [[ -e /usr/lib/systemd/system/$unit ]] && ! systemctl -q is-enabled "$unit" 2>/dev/null; then
+			systemctl enable --now "$unit" || true
+		fi
+	done
+}
+
 upgrade() {
 	ensure_repos
 	# A system left alone for months may not know the keys newer packages
@@ -47,6 +57,7 @@ upgrade() {
 	# Arch recommends).
 	pacman -Sy --needed --noconfirm archlinux-keyring
 	pacman -Su --noconfirm
+	enable_services
 	if command -v flatpak >/dev/null && [[ -n "$(flatpak list --system --columns=application)" ]]; then
 		flatpak update --system --noninteractive -y
 	fi

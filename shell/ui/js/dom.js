@@ -72,6 +72,9 @@ const PATHS = {
   trash: '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>',
   install: '<path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><rect x="3" y="17" width="18" height="4" rx="1.5"/>',
   x: '<path d="M18 6L6 18M6 6l12 12"/>',
+  sliders: '<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
+  gauge: '<path d="M12 14l4-4"/><path d="M3.3 19a10 10 0 1 1 17.4 0"/>',
+  leaf: '<path d="M11 20A7 7 0 0 1 4 13c0-5 4-9 16-9 0 12-4 16-9 16z"/><path d="M4 21c3-6 7-9 11-11"/>',
 };
 
 export function icon(name, cls = "") {

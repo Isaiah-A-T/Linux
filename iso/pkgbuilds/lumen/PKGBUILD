@@ -8,7 +8,9 @@ arch=('any')
 url="https://github.com/Isaiah-A-T/Linux"
 license=('MIT')
 depends=('python' 'gamescope' 'chromium' 'cage' 'greetd' 'networkmanager' 'bluez-utils'
-         'wireplumber' 'flatpak' 'xorg-xprop' 'polkit')
+         'wireplumber' 'flatpak' 'xorg-xprop' 'polkit'
+         # Game settings: per-game button layouts and power mode.
+         'inputplumber' 'power-profiles-daemon')
 optdepends=('steam: Steam library'
             'legendary: Epic Games library'
             'gogdl: GOG library'

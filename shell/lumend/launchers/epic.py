@@ -127,11 +127,11 @@ class Epic(Launcher):
     def uninstall(self, game_id):
         run(["legendary", "uninstall", game_id, "-y"], timeout=300)
 
-    def launch(self, game_id):
+    def launch(self, game_id, env=None):
         wrapper = proton.runner()
         if wrapper is None:
             raise ApiError("Neither umu-launcher nor Wine is installed.")
         cmd = ["legendary", "launch", game_id, "--no-wine", "--wrapper", " ".join(wrapper)]
-        subprocess.Popen(cmd, env=proton.env_for("egs", game_id), start_new_session=True,
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                         cwd=os.path.expanduser("~"))
+        return subprocess.Popen(cmd, env={**proton.env_for("egs", game_id), **(env or {})}, start_new_session=True,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                cwd=os.path.expanduser("~"))

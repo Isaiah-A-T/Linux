@@ -33,5 +33,8 @@ class Launcher:
     def uninstall(self, game_id):
         raise NotImplementedError
 
-    def launch(self, game_id):
+    def launch(self, game_id, env=None):
+        """Start a game. env adds variables for the game's process. Returns
+        the process when the game runs as our child, so lumend can tell when
+        it exits, else None."""
         raise NotImplementedError

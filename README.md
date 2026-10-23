@@ -45,6 +45,19 @@ Steam games run through the Steam client and its own Proton. Epic games
 Wine prefix under `~/Games/Prefixes/`. Plain Wine is installed too, for the
 odd game that runs better outside Proton.
 
+**Game settings** (a game's details › Game settings) gives each game its own
+frame rate cap (30 to 120 FPS), power mode (Performance, Balanced, or Quiet
+and battery saver) and button layout (swap A/B, X/Y, bumpers and triggers, or
+remap any single button or turn it off). They switch on when the game starts
+and back off when you return to Lumen. The cap is set through gamescope, so
+it works for Steam games too; power modes use power-profiles-daemon and
+button layouts use InputPlumber.
+
+<p>
+  <img src="docs/screenshots/game-settings.png" width="49%" alt="Game settings">
+  <img src="docs/screenshots/game-settings-buttons.png" width="49%" alt="Button layout">
+</p>
+
 **Store** searches Flathub and the Snap Store at the same time and merges the
 results. An app that is in both shows once, preferring Flatpak. The app page
 has the icon, description, screenshots and which source it installs from.
@@ -191,6 +204,9 @@ Not tested yet:
   downloading and launching games through Proton has only been exercised
   with mock data.
 - **Store installs** from Flathub and Snap on an installed system.
+- **Game settings** on real hardware: the gamescope frame cap, power modes
+  and InputPlumber button layouts have only been checked against mock data
+  and unit tests.
 - **System update** end to end: updating an installed system from the
   `[lumen]` repo.
 - **The PS5 image.** No CI build of it has finished successfully yet (the

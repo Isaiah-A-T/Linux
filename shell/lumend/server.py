@@ -4,12 +4,13 @@ import json
 import mimetypes
 import os
 import subprocess
+import threading
 import traceback
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import __version__, apps, art, fun, jobs, library, mock, store, system, update, users
+from . import __version__, apps, art, fun, gamesettings, jobs, library, mock, store, system, update, users
 from .util import ApiError, mock_enabled
 
 
@@ -82,6 +83,9 @@ ROUTES = {
     ("POST", "/api/library/launch"): lambda q, b: library.launch(b["id"]),
     ("POST", "/api/library/install"): lambda q, b: library.install(b["id"]),
     ("POST", "/api/library/uninstall"): lambda q, b: library.uninstall(b["id"]),
+    ("GET", "/api/game-settings"): lambda q, b: gamesettings.get(library.get(q.get("id", ""))["id"]),
+    ("POST", "/api/game-settings"): lambda q, b: gamesettings.update(library.get(b["id"])["id"], b),
+    ("POST", "/api/game-settings/restore"): lambda q, b: gamesettings.restore(),
     ("GET", "/api/accounts"): lambda q, b: {"accounts": library.accounts()},
     ("POST", "/api/accounts/connect"): lambda q, b: {"accounts": library.connect(b["launcher"], b)},
     ("POST", "/api/accounts/disconnect"): lambda q, b: {"accounts": library.disconnect(b["launcher"])},
@@ -221,5 +225,7 @@ def serve(port, ui_root, mode="session"):
     Handler.mode = mode
     httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     httpd.daemon_threads = True
+    if mode == "session":
+        threading.Thread(target=gamesettings.prepare, daemon=True).start()
     print(f"lumend {__version__} ({mode}) on http://127.0.0.1:{port}/", flush=True)
     httpd.serve_forever()

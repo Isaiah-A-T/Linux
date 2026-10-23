@@ -133,8 +133,9 @@ touch "$root/var/lib/lumen/setup-pending"
 arch-chroot "$root" systemctl enable \
 	greetd.service NetworkManager.service bluetooth.service systemd-timesyncd.service \
 	lumen-grow-rootfs.service lumen-keyring.service lumen-finish-setup.service
-# Optional units: snapd from the AUR, Wi-Fi firmware staging from linux-ps5.
-for unit in snapd.socket ps5-stage-firmware.service; do
+# Optional units: snapd from the AUR, Wi-Fi firmware staging from linux-ps5,
+# and the services behind per-game Game settings.
+for unit in snapd.socket ps5-stage-firmware.service inputplumber.service power-profiles-daemon.service; do
 	arch-chroot "$root" systemctl enable "$unit" 2>/dev/null || echo "not enabling $unit"
 done
 

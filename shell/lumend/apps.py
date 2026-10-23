@@ -127,6 +127,6 @@ def exec_args(exec_line):
     return [a for a in shlex.split(exec_line) if a not in _FIELD_CODES]
 
 
-def launch(item):
-    subprocess.Popen(exec_args(item["_exec"]), start_new_session=True,
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+def launch(item, env=None):
+    return subprocess.Popen(exec_args(item["_exec"]), start_new_session=True, env={**os.environ, **(env or {})},
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

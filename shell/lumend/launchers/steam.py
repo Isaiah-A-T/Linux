@@ -189,5 +189,7 @@ class Steam(Launcher):
     def uninstall(self, game_id):
         self._open(f"steam://uninstall/{game_id}")
 
-    def launch(self, game_id):
+    def launch(self, game_id, env=None):
+        # Steam starts the game itself, so env can't reach it.
         self._open(f"steam://rungameid/{game_id}")
+        return None

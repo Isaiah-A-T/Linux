@@ -81,6 +81,25 @@ with the store's own images and then a generated cover as fallbacks. lumend
 downloads each image once into `~/.cache/lumen/art`, so art keeps working
 offline.
 
+## Game settings
+
+Each game can have a frame rate cap, a power mode and a button layout
+(`shell/lumend/gamesettings.py`, stored in `~/.local/share/lumen/game-settings.json`).
+lumend applies them just before it launches the game and puts everything
+back when the shell gets focus again, or when a game it started itself exits.
+
+* **Frame rate cap.** The `GAMESCOPE_FPS_LIMIT` root window property, the
+  same one SteamOS sets, so it covers Steam games too. Epic, GOG and app
+  launches also get `DXVK_FRAME_RATE` and `VKD3D_FRAME_RATE`.
+* **Power mode.** `powerprofilesctl` (power-profiles-daemon):
+  performance, balanced or power-saver. The mode from before the game is
+  restored afterwards.
+* **Button layout.** An InputPlumber device profile, loaded over D-Bus on
+  every controller InputPlumber manages. lumend turns on
+  `ManageAllDevices` at session start so ordinary USB and Bluetooth pads are
+  covered, not just handheld built-ins. Steam Input, when it is on for a
+  game, applies its own layout on top.
+
 ## Store
 
 The Store searches Flathub (`flathub.org/api/v2`) and the Snap Store

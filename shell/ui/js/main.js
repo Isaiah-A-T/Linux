@@ -1,6 +1,6 @@
 // Entry point: loads state, builds the frame and routes input to views.
 
-import { get } from "./api.js";
+import { get, post } from "./api.js";
 import { h } from "./dom.js";
 import { focus, focused, focusFirst, move, onFocus, setBase, topLayer } from "./focus.js";
 import { lastDevice, onAction } from "./input.js";
@@ -147,6 +147,17 @@ document.addEventListener("focusin", (e) => {
 });
 
 onFocus(() => {});
+
+// When a game takes over the screen the shell loses focus. Coming back means
+// the game has closed (or you switched away), so lumend puts the power mode,
+// frame rate cap and button layout back to normal.
+let away = false;
+window.addEventListener("blur", () => { away = true; });
+window.addEventListener("focus", () => {
+  if (!away || state.info.mode === "greeter") return;
+  away = false;
+  post("game-settings/restore").catch(() => {});
+});
 
 async function boot() {
   const params = new URLSearchParams(location.search);

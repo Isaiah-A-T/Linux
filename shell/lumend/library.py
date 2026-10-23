@@ -4,7 +4,7 @@ import os
 import threading
 import time
 
-from . import apps, art, jobs, mock, recents
+from . import apps, art, gamesettings, jobs, mock, recents
 from .launchers import LAUNCHERS
 from .util import ApiError, mock_enabled
 
@@ -83,13 +83,20 @@ def launch(item_id):
     if not item.get("installed"):
         raise ApiError(f"{item['title']} isn't installed yet.")
     recents.touch(item)
+    gamesettings.apply(item_id)
     if mock_enabled():
         return {"ok": True}
     source, ident = _split(item_id)
-    if source == "app":
-        apps.launch(item)
-    else:
-        LAUNCHERS[source].launch(ident)
+    env = gamesettings.launch_env(item_id)
+    try:
+        if source == "app":
+            proc = apps.launch(item, env)
+        else:
+            proc = LAUNCHERS[source].launch(ident, env)
+    except Exception:
+        gamesettings.restore()
+        raise
+    gamesettings.restore_when_done(proc, item_id)
     return {"ok": True}
 
 
