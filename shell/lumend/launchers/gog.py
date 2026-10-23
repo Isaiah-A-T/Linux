@@ -201,5 +201,5 @@ class GOG(Launcher):
         exe = Path(game_dir) / task["path"].replace("\\", "/")
         cwd = Path(game_dir) / task.get("workingDir", "").replace("\\", "/")
         args = task.get("arguments", "").split() if task.get("arguments") else []
-        subprocess.Popen([*wrapper, str(exe), *args], cwd=str(cwd), env=proton.env_for("gog", game_id),
+        return subprocess.Popen([*wrapper, str(exe), *args], cwd=str(cwd), env=proton.env_for("gog", game_id),
                          start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

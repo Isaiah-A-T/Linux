@@ -132,6 +132,6 @@ class Epic(Launcher):
         if wrapper is None:
             raise ApiError("Neither umu-launcher nor Wine is installed.")
         cmd = ["legendary", "launch", game_id, "--no-wine", "--wrapper", " ".join(wrapper)]
-        subprocess.Popen(cmd, env=proton.env_for("egs", game_id), start_new_session=True,
+        return subprocess.Popen(cmd, env=proton.env_for("egs", game_id), start_new_session=True,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                          cwd=os.path.expanduser("~"))

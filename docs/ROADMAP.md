@@ -71,6 +71,28 @@ airplane mode. Settings links to it instead of repeating those controls.
   with GE-Proton. Each game gets its own prefix in `~/Games/Prefixes/`.
   Wine is also installed for the rare title that runs better outside Proton.
 
+## Quick Resume
+
+lumend tracks every game and app it starts (`shell/lumend/resume.py`). Each
+one is known by its process session (lumend starts it with
+`start_new_session`), or for Steam games by Steam's `reaper ... AppId=<id>`
+wrapper and everything below it.
+
+* **Going Home.** lumend reads the controllers' evdev devices itself
+  (`shell/lumend/pads.py`) because the shell's Chromium window doesn't get
+  input while a game has focus. A Guide press pauses the game on screen
+  (SIGSTOP on its whole process tree) and brings the shell back. While a game
+  is on screen the shell ignores the controller.
+* **What's on screen.** gamescope lists its windows with their pids in
+  `GAMESCOPE_FOCUSABLE_WINDOWS` and shows the one named in
+  `GAMESCOPECTRL_BASELAYER_WINDOW`. lumend sets that with `xprop`
+  (`shell/lumend/gamescope.py`), and keeps it on the game's newest window
+  while the game is up. lumen-ui writes gamescope's `DISPLAY` to
+  `$XDG_RUNTIME_DIR/lumen/display.env`, since lumend starts before gamescope.
+* **Resuming** sends SIGCONT and shows the game's window again. Three games
+  stay paused at most; the one paused longest ago is closed to make room.
+  Sleep pauses the game on screen first. Apps are tracked but never paused.
+
 ## Game art
 
 Every game shows real cover art, and on Home and in the Library the

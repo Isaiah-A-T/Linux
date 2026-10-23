@@ -4,7 +4,7 @@ import os
 import re
 import shutil
 
-from ..util import games_dir
+from ..util import games_dir, session_env
 
 
 def prefix_for(store, game_id):
@@ -21,13 +21,12 @@ def env_for(store, game_id):
     Epic/GOG install comes with a working Proton without a separate step.
     STORE lets umu-protonfixes apply the right per-game fixes.
     """
-    return {
-        **os.environ,
+    return session_env({
         "WINEPREFIX": str(prefix_for(store, game_id)),
         "GAMEID": f"umu-{game_id}" if store == "egs" else f"umu-gog-{game_id}",
         "STORE": store,
         "PROTONPATH": os.environ.get("LUMEN_PROTON", "GE-Proton"),
-    }
+    })
 
 
 def runner():

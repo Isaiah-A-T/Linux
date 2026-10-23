@@ -8,7 +8,7 @@ from unittest import mock
 
 os.environ.setdefault("XDG_DATA_HOME", tempfile.mkdtemp())
 
-from lumend import art, jobs, recents, store, system, update  # noqa: E402
+from lumend import art, gamescope, jobs, pads, recents, resume, store, system, update  # noqa: E402
 from lumend.launchers import gog, steam, vdf  # noqa: E402
 
 
@@ -156,6 +156,101 @@ class RecentsTest(unittest.TestCase):
         items = [{"id": "a", "installed": False, "last_played": 10}, {"id": "b", "installed": True, "last_played": 5}]
         with mock.patch.object(recents, "load", return_value=[{"id": "a", "last_played": 20}]):
             self.assertEqual([i["id"] for i in recents.home_items(items)], ["b"])
+
+
+class QuickResumeTest(unittest.TestCase):
+    def setUp(self):
+        resume._entries.clear()
+        resume._front["id"] = None
+        self.sent = []
+        # pid: (ppid, sid, state). 100 is a game whose wineserver (102)
+        # left the tree but kept the session; 200 is Steam's reaper for 620.
+        self.procs = {100: (1, 100, "S"), 101: (100, 100, "S"), 102: (1, 100, "S"), 103: (101, 100, "Z"),
+                      200: (50, 50, "S"), 201: (200, 50, "S"), 300: (1, 300, "S"), 400: (1, 400, "S"),
+                      500: (1, 500, "S")}
+        patches = [
+            mock.patch.object(resume, "processes", lambda: self.procs),
+            mock.patch.object(resume, "_cmdline", lambda pid: [b"/x/reaper", b"SteamLaunch", b"AppId=620"] if pid == 200 else []),
+            mock.patch.object(resume.os, "kill", lambda pid, sig: self.sent.append((pid, sig))),
+            mock.patch.object(resume.threading, "Thread", mock.MagicMock()),
+            mock.patch.object(resume, "gamescope", mock.MagicMock()),
+            mock.patch.dict(os.environ, {"LUMEN_MOCK": "0"}),
+        ]
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+
+    def game(self, item_id, pid, source="epic"):
+        item = {"id": item_id, "title": item_id, "kind": "game", "source": source, "art": {}}
+        return resume.started(item, mock.Mock(pid=pid) if pid else None)
+
+    def test_members_follow_session_and_tree_and_skip_zombies(self):
+        self.assertEqual(resume.members({"pid": 100, "sid": 100}, self.procs), {100, 101, 102})
+
+    def test_steam_games_are_found_through_the_reaper(self):
+        self.game("steam:620", None, source="steam")
+        self.assertEqual(resume.members(resume.get("steam:620"), self.procs), {200, 201})
+
+    def test_starting_another_game_pauses_the_one_on_screen(self):
+        self.game("epic:a", 100)
+        self.game("epic:b", 300)
+        st = resume.status()
+        self.assertEqual(st["front"], "epic:b")
+        self.assertEqual({i["id"]: i["state"] for i in st["items"]}, {"epic:a": "paused", "epic:b": "running"})
+        self.assertEqual(sorted(p for p, sig in self.sent if sig == resume.signal.SIGSTOP), [100, 101, 102])
+
+    def test_resume_continues_the_game(self):
+        self.game("epic:a", 100)
+        resume.go_home()
+        self.sent.clear()
+        resume.resume("epic:a")
+        self.assertEqual(resume.status()["front"], "epic:a")
+        self.assertEqual(sorted(p for p, sig in self.sent if sig == resume.signal.SIGCONT), [100, 101, 102])
+
+    def test_oldest_paused_game_is_closed_past_the_limit(self):
+        for item_id, pid in (("epic:a", 100), ("epic:b", 300), ("epic:c", 400), ("epic:d", 500)):
+            closed = self.game(item_id, pid)
+        self.assertEqual(closed, ["epic:a"])
+        self.assertIsNone(resume.get("epic:a"))
+        self.assertEqual(len(resume.status()["items"]), resume.LIMIT)
+
+    def test_games_that_quit_are_forgotten(self):
+        self.game("epic:a", 300)
+        del self.procs[300]
+        self.assertEqual(resume.status(), {"front": None, "limit": resume.LIMIT, "items": []})
+
+    def test_apps_keep_running_when_you_go_home(self):
+        resume.started({"id": "app:x", "title": "X", "kind": "app", "source": "app"}, mock.Mock(pid=300))
+        resume.go_home()
+        self.assertEqual(resume.status()["items"][0]["state"], "running")
+        self.assertEqual(self.sent, [])
+
+
+class GuideTest(unittest.TestCase):
+    def test_capability_bitmap(self):
+        bits = 64 * 5
+        guide = 1 << pads.BTN_MODE
+        words = [f"{guide >> (64 * i) & (2 ** 64 - 1):x}" for i in reversed(range(bits // 64))]
+        self.assertTrue(pads.has_guide(" ".join(words)))
+        # A keyboard: plenty of keys, no gamepad buttons.
+        self.assertFalse(pads.has_guide("fffffffffffffffe"))
+        self.assertFalse(pads.has_guide("0"))
+
+    def test_guide_fires_on_release_but_not_in_combinations(self):
+        hits = []
+        w = pads.GuideWatcher(lambda: hits.append(1))
+        w.feed(3, pads.EV_KEY, pads.BTN_MODE, 1)
+        w.feed(3, pads.EV_KEY, pads.BTN_MODE, 0)
+        self.assertEqual(hits, [1])
+        w.feed(3, pads.EV_KEY, pads.BTN_MODE, 1)
+        w.feed(3, pads.EV_KEY, 0x134, 1)  # Y
+        w.feed(3, pads.EV_KEY, pads.BTN_MODE, 0)
+        self.assertEqual(hits, [1])
+
+    def test_gamescope_window_list(self):
+        text = "GAMESCOPE_FOCUSABLE_WINDOWS = 4194307, 769, 1200, 6291458, 0, 3400\n"
+        self.assertEqual(gamescope.parse_windows(text), [(4194307, 769, 1200), (6291458, 0, 3400)])
+        self.assertEqual(gamescope.parse_windows(""), [])
 
 
 class GreetdTest(unittest.TestCase):

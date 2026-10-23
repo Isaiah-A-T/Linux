@@ -4,9 +4,9 @@ import os
 import threading
 import time
 
-from . import apps, art, jobs, mock, recents
+from . import apps, art, jobs, mock, recents, resume
 from .launchers import LAUNCHERS
-from .util import ApiError, mock_enabled
+from .util import ApiError, mock_enabled, session_env
 
 _cache = {"time": 0, "items": []}
 _lock = threading.Lock()
@@ -79,18 +79,19 @@ def _split(item_id):
 
 
 def launch(item_id):
+    """Start a game or app, or jump back into it if it's already running."""
+    if resume.get(item_id):
+        return {"ok": True, "resumed": True, "closed": [], "running": resume.resume(item_id)}
     item = get(item_id)
     if not item.get("installed"):
         raise ApiError(f"{item['title']} isn't installed yet.")
     recents.touch(item)
-    if mock_enabled():
-        return {"ok": True}
-    source, ident = _split(item_id)
-    if source == "app":
-        apps.launch(item)
-    else:
-        LAUNCHERS[source].launch(ident)
-    return {"ok": True}
+    proc = None
+    if not mock_enabled():
+        source, ident = _split(item_id)
+        proc = apps.launch(item) if source == "app" else LAUNCHERS[source].launch(ident)
+    closed = resume.started(item, proc)
+    return {"ok": True, "resumed": False, "closed": closed}
 
 
 def install(item_id):
@@ -108,6 +109,7 @@ def install(item_id):
 def uninstall(item_id):
     source, ident = _split(item_id)
     recents.forget(item_id)
+    resume.close(item_id)
     if mock_enabled():
         mock.state.setdefault("installed_extra", set()).discard(item_id)
         return {"ok": True}
@@ -155,5 +157,5 @@ def open_url(url):
         import subprocess
         state = os.path.expanduser("~/.local/state/lumen/chromium-web")
         subprocess.Popen(["chromium", f"--user-data-dir={state}", "--start-fullscreen", f"--app={url}"],
-                         start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                         env=session_env(), start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return {"ok": True}

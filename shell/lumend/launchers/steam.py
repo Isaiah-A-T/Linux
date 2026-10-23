@@ -8,7 +8,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from ..util import ApiError, data_dir, have, load_json, save_json
+from ..util import ApiError, data_dir, have, load_json, save_json, session_env
 from . import vdf
 from .base import Launcher
 
@@ -119,7 +119,7 @@ class Steam(Launcher):
             if not self.available():
                 raise ApiError("Steam isn't installed.")
             subprocess.Popen(["steam", "-silent" if payload.get("api_key") else "steam://open/main"],
-                             start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                             env=session_env(), start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return self.describe()
 
     def disconnect(self):
@@ -177,7 +177,7 @@ class Steam(Launcher):
     def _open(self, url):
         if not have("steam"):
             raise ApiError("Steam isn't installed.")
-        subprocess.Popen(["steam", url], start_new_session=True,
+        subprocess.Popen(["steam", url], env=session_env(), start_new_session=True,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def install(self, game_id):

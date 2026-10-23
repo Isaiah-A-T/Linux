@@ -45,6 +45,15 @@ Steam games run through the Steam client and its own Proton. Epic games
 Wine prefix under `~/Games/Prefixes/`. Plain Wine is installed too, for the
 odd game that runs better outside Proton.
 
+**Quick Resume.** Press the Guide button in a game and you're back on Home,
+with the game paused right where you left it: it uses no CPU or GPU while
+paused, and picking it again carries on from the same frame. Up to three
+games stay paused at once (starting a fourth closes the one paused longest
+ago), they survive Sleep, and X › Close game ends one for good. Paused games
+don't survive a restart or signing out, and online games may drop their
+connection while paused. Apps such as music players keep running when you go
+Home.
+
 **Store** searches Flathub and the Snap Store at the same time and merges the
 results. An app that is in both shows once, preferring Flatpak. The app page
 has the icon, description, screenshots and which source it installs from.
@@ -193,6 +202,10 @@ Not tested yet:
 - **Store installs** from Flathub and Snap on an installed system.
 - **System update** end to end: updating an installed system from the
   `[lumen]` repo.
+- **Quick Resume on real hardware.** The pausing and the Guide button are
+  covered by unit tests, but switching between the shell and a game relies on
+  gamescope's focus properties and has not been tried on a real session yet.
+  Steam may also keep the Guide button for its own overlay.
 - **The PS5 image.** No CI build of it has finished successfully yet (the
   first build of the current `main` was still running when this was
   written), and no one has booted it on a PS5.
