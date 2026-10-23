@@ -9,7 +9,7 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import __version__, apps, art, fun, jobs, library, mock, resume, store, system, update, users
+from . import __version__, apps, art, capture, fun, jobs, library, mock, resume, saves, store, system, update, users
 from .util import ApiError, mock_enabled
 
 
@@ -110,6 +110,13 @@ ROUTES = {
     ("GET", "/api/media"): lambda q, b: fun.media(),
     ("POST", "/api/media"): lambda q, b: fun.media_action(b.get("action")),
     ("GET", "/api/album"): lambda q, b: fun.album(),
+    ("GET", "/api/capture"): lambda q, b: capture.status(),
+    ("POST", "/api/capture"): lambda q, b: capture.update_settings(b),
+    ("POST", "/api/capture/screenshot"): lambda q, b: capture.screenshot(),
+    ("POST", "/api/capture/clip"): lambda q, b: capture.clip(),
+    ("GET", "/api/saves"): lambda q, b: saves.status(),
+    ("POST", "/api/saves"): lambda q, b: saves.set_enabled(b.get("enabled")),
+    ("POST", "/api/saves/sync"): lambda q, b: saves.sync_all(),
     ("GET", "/api/settings"): lambda q, b: fun.settings(),
     ("POST", "/api/settings"): lambda q, b: fun.update_settings(b),
 
@@ -234,6 +241,7 @@ def serve(port, ui_root, mode="session"):
     httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     httpd.daemon_threads = True
     if mode == "session":
+        capture.start()
         resume.start(library.items() if mock_enabled() else None)
     print(f"lumend {__version__} ({mode}) on http://127.0.0.1:{port}/", flush=True)
     httpd.serve_forever()

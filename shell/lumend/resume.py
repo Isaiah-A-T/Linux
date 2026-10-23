@@ -125,8 +125,9 @@ def _prune():
     for item_id, entry in list(_entries.items()):
         if members(entry, procs):
             continue
-        if entry["pid"] is None and entry.get("steam_appid") and time.time() - entry["started"] < STEAM_GRACE:
-            continue  # Steam hasn't started it yet
+        if entry["pid"] is None and (entry.get("steam_appid") or entry.get("pending")) \
+                and time.time() - entry["started"] < STEAM_GRACE:
+            continue  # Steam, or a cloud save download, hasn't started it yet
         del _entries[item_id]
         if _front["id"] == item_id:
             _front["id"] = None
@@ -171,9 +172,22 @@ def started(item, proc):
         entry = _entry(item, pid, "running")
         if item["source"] == "steam":
             entry["steam_appid"] = item["id"].partition(":")[2]
+        elif proc is None:
+            entry["pending"] = True  # cloud saves download first; see attach()
         _entries[item["id"]] = entry
         _front["id"] = item["id"]
         return closed
+
+
+def attach(item_id, proc):
+    """Give a game started late (after its cloud saves came down) its process."""
+    with _lock:
+        entry = _entries.get(item_id)
+        if entry is None or not entry.pop("pending", False):
+            return
+        entry["pid"] = entry["sid"] = proc.pid
+        if entry["state"] == "paused":  # left for Home while the saves synced
+            _signal(entry, signal.SIGSTOP)
 
 
 def _entry(item, pid, state):

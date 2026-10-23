@@ -13,7 +13,8 @@ optdepends=('steam: Steam library'
             'legendary: Epic Games library'
             'gogdl: GOG library'
             'umu-launcher: run Epic and GOG games with Proton'
-            'snapd: Snap Store apps')
+            'snapd: Snap Store apps'
+            'gpu-screen-recorder: save gameplay clips from the controller')
 
 # Settings › System update installs the shell from the [lumen] repo, so every
 # commit needs a newer version: 0.1.0.r<commit date>.<commit time>.
