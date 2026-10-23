@@ -6,8 +6,9 @@ shell, power-on screen and setup as the ISO, on the ps5-linux kernel.
 
 > **Experimental.** Linux on firmware 13.60 is brand new (soniciso's loader,
 > October 2026). Expect rough edges: USB I/O problems are being worked on,
-> there is no standby, Wi-Fi works only on Marvell chips (Ethernet works on
-> every model) and some TVs show a black screen until `cmdline.txt` is
+> there is no standby, Wi-Fi on consoles with the MediaTek chip is new and
+> less tested than on the Marvell chip (Ethernet works on every model) and
+> some TVs show a black screen until `cmdline.txt` is
 > tweaked (see [Troubleshooting](#troubleshooting)).
 
 ## What works where
@@ -28,7 +29,8 @@ Lumen.
   loader on port 9021 (on 13.60, the Relapse browser jailbreak does).
 - A USB drive of **64 GB or more**. An external USB SSD is much faster.
 - A PC on the same network as the PS5.
-- A USB controller, keyboard or mouse for setup. A DualSense works over USB.
+- A controller, keyboard or mouse for setup. A DualSense pairs over
+  Bluetooth on the first screen (step 6), or works right away on a USB cable.
 
 ## 1. Get the image
 
@@ -39,9 +41,11 @@ Lumen.
 To build it yourself on Arch Linux (needs about 60 GB free):
 
 ```sh
+git clone https://github.com/Isaiah-A-T/Linux
 git clone https://github.com/ps5-linux/ps5-linux-image && cd ps5-linux-image
+../Linux/ps5/kernel/prepare.sh .                      # Lumen's kernel patches
 ./build_image.sh --kernel-only --distro arch        # needs Docker
-cd .. && sudo ./ps5/build.sh ps5-linux-image/linux-bin out
+cd .. && sudo ./Linux/ps5/build.sh ps5-linux-image/linux-bin out
 ```
 
 ## 2. Flash the USB drive
@@ -93,7 +97,14 @@ MD5 checksum to compare against.
 
 ## 6. First boot
 
-The first start shows Lumen's power-on screen:
+Lumen first asks you to **connect your controller**. A DualSense paired
+with the PS5 system software isn't paired with Linux, so **hold PS + Create
+until the light bar flashes**. Lumen pairs it, shows "Controller connected"
+and moves on by itself. A controller on a USB cable, or one paired with
+Lumen before, skips this screen. Xbox and 8BitDo controllers work the same
+way with their pairing button; Enter on a keyboard skips it.
+
+Then comes Lumen's power-on screen:
 
 - **Set up Lumen OS** picks language, region, keyboard and your profile
   (name, avatar, password or PIN). There's no disk step: Lumen already runs
@@ -121,6 +132,11 @@ from the shell, or hold the power button.
 
 ## Troubleshooting
 
+**Logs:** every minute Lumen copies its logs to a `lumen-logs` folder on the
+USB drive's `boot` partition. Plug the drive into a PC after a try and send
+`status.txt`, `journal.txt` and any `installer-session.log` or
+`calamares.log` along with your report.
+
 The light is white but the screen stays black. Open the `boot` partition of
 the USB drive on a PC and edit `cmdline.txt` (one line):
 
@@ -135,8 +151,12 @@ Other things:
 - **The console freezes instead of going to rest mode:** etaHEN or kstuff is
   loaded. Reboot and run the jailbreak without them.
 - **A "repairing" screen after turning the PS5 back on:** harmless.
-- **No Wi-Fi:** only Marvell Wi-Fi chips are supported so far. Use Ethernet
-  or a USB Wi-Fi adapter.
+- **No Wi-Fi:** PS5s have one of two Wi-Fi/Bluetooth chips, varying from
+  unit to unit even within one model: Marvell (IW620) or MediaTek (MT7921).
+  Lumen includes drivers for both and uses whichever is there. `status.txt`
+  in `lumen-logs` shows which one your console has (the `lspci` section:
+  `1b4b:2b56` is Marvell, `14c3:7961` is MediaTek). If neither connects, use
+  Ethernet or a USB Wi-Fi adapter and send the logs.
 - **The shell starts in a plain window instead of fullscreen gamescope:**
   gamescope couldn't take the display. Its settings for the PS5 are in
   `/etc/lumen/session.conf`.
@@ -153,7 +173,10 @@ Help and reports for the loader and kernel: the ps5-linux
 2. `pacstrap`s a root file system from `ps5/packages.x86_64`,
    `iso/packages.x86_64` and `installer/packages.x86_64` (without GRUB);
 3. installs the `linux-ps5` kernel package in place of `linux`, with an
-   initramfs that loads `amdgpu` early;
+   initramfs that loads `amdgpu` early. The kernel carries
+   `ps5/kernel/patches` (see `ps5/kernel/prepare.sh`): the MediaTek MT7921
+   Wi-Fi driver with power saving off, and the MediaTek Bluetooth fixes from
+   [ps5-mediatek-fixes](https://github.com/WizGery/ps5-mediatek-fixes);
 4. copies `installer/airootfs` and then `ps5/rootfs` over it. The PS5
    overlay holds the setup sequence without the disk step (Calamares runs on
    the running system, `dont-chroot`), the first-boot greetd config, the

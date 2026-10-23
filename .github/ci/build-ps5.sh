@@ -21,4 +21,4 @@ sed -i 's/^OPTIONS=(\(.*\)debug/OPTIONS=(\1!debug/' /etc/makepkg.conf
 echo "MAKEFLAGS=\"-j$(nproc)\"" >> /etc/makepkg.conf
 
 git config --global --add safe.directory "$src"
-SUDO_USER=builder WORK_DIR=/tmp/lumen-ps5 "$src/ps5/build.sh" "$kernel" "$src/out"
+SUDO_USER=builder WORK_DIR=/tmp/lumen-ps5 LUMEN_SMOKE_TEST=1 "$src/ps5/build.sh" "$kernel" "$src/out"
