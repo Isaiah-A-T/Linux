@@ -1,5 +1,6 @@
 // Screenshots of the shell in mock mode, with real game art from Steam.
 // Usage: node ui-screenshots.js <out dir>   (lumend must be running with LUMEN_MOCK=1)
+// The names match docs/screenshots, so a run can be copied straight into the README.
 const { chromium } = require("playwright");
 
 const out = process.argv[2];
@@ -18,31 +19,69 @@ const base = process.env.LUMEN_URL || "http://127.0.0.1:7777/";
     console.log(name);
   };
   const fresh = async (q = "") => { await page.goto(base + q); await page.waitForTimeout(2000); };
+  const click = async (text) => {
+    await page.locator("button:visible", { hasText: text }).first().click();
+    await page.mouse.move(0, 0); // so hover doesn't move the focus
+    await page.waitForTimeout(400);
+  };
 
   // First load starts the Steam title lookups for Epic and GOG games.
   await fresh();
   await page.waitForTimeout(15000);
 
-  await fresh();
-  await shot("01-home-game");
-  await key("ArrowRight");
-  await shot("02-home-epic-game");
-  await key("ArrowRight", 2);
-  await shot("03-home-gog-game");
-  await key("ArrowRight");
-  await shot("04-home-app");
-
-  await fresh("?view=library");
-  await key("ArrowRight", 2);
-  await shot("05-library-game");
-  await key("ArrowDown", 2);
-  await shot("06-library-row-3");
-  await key("Enter");
-  await shot("07-game-details");
+  await fresh("?mode=greeter");
+  await shot("sign-in");
 
   // Mock mode starts with the first game (Hades) paused in Quick Resume.
   await fresh();
+  await shot("home-game-art");
   await key("ContextMenu");
-  await shot("08-quick-resume");
+  await shot("quick-resume");
+
+  await fresh();
+  await key("F1");
+  await shot("quick-settings");
+
+  await fresh("?view=library");
+  await key("ArrowRight", 2);
+  await shot("library-game-art");
+
+  // A Steam game's details, then its Proton picker.
+  await fresh("?view=library&tab=steam");
+  await key("ArrowRight", 2);
+  await key("ContextMenu");
+  await shot("game-details");
+  await click(/Proton/);
+  await shot("choose-proton");
+
+  await key("Escape");
+  await click("Game settings");
+  await shot("game-settings");
+  await click("Button layout");
+  await shot("game-settings-buttons");
+
+  await fresh("?view=library&tab=accounts");
+  await shot("accounts");
+
+  await fresh("?view=settings&page=update");
+  await key("ArrowDown");
+  await shot("system-update");
+  await fresh("?view=settings&page=saves");
+  await key("ArrowDown", 2);
+  await shot("saves-captures");
+
+  await fresh("?view=store");
+  await shot("store");
+  await page.locator(".app-card").first().click();
+  await page.mouse.move(0, 0);
+  await shot("store-app");
+
+  // The on-screen keyboard opens for controllers only, so open it by hand.
+  await fresh("?view=store&search=1");
+  await page.evaluate(async () => {
+    const { openKeyboard } = await import("./js/osk.js");
+    openKeyboard(document.querySelector("input.field"));
+  });
+  await shot("onscreen-keyboard");
   await browser.close();
 })();
