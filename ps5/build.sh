@@ -60,6 +60,9 @@ mapfile -t pkgs < <(printf '%s\n' "${pkgs[@]}" | sort -u)
 if mountpoint -q "$root"; then umount -R "$root"; fi
 rm -rf "$root"
 mkdir -p "$root"
+# Make the root a mount point: arch-chroot and pacman's disk space check
+# need one ("could not determine root mount point /").
+mount --bind "$root" "$root"
 # -G: don't copy the build host's keyring; lumen-keyring.service makes a
 # fresh one on first boot.
 pacstrap -C "$conf" -G "$root" "${pkgs[@]}"
@@ -132,15 +135,39 @@ touch "$root/var/lib/lumen/setup-pending"
 
 arch-chroot "$root" systemctl enable \
 	greetd.service NetworkManager.service bluetooth.service systemd-timesyncd.service \
-	lumen-grow-rootfs.service lumen-keyring.service lumen-finish-setup.service
+	lumen-grow-rootfs.service lumen-keyring.service lumen-finish-setup.service \
+	lumen-export-logs.timer lumen-pad-pair.service
 # Optional units: snapd from the AUR, Wi-Fi firmware staging from linux-ps5.
 for unit in snapd.socket ps5-stage-firmware.service; do
 	arch-chroot "$root" systemctl enable "$unit" 2>/dev/null || echo "not enabling $unit"
 done
 
+# CI: start setup the way the power-on screen does (as player, through
+# lumen-installer and sudo) on a virtual display, and print what Calamares
+# logs, so a setup that won't open shows up in the build log. Calamares
+# still running when the timeout hits (exit 124) is the good case.
+if [[ -n "${LUMEN_SMOKE_TEST:-}" ]]; then
+	echo "==> Smoke test: start setup on a virtual display"
+	# The host's pacman: the image's keyring is only set up on first boot.
+	smoke_pkgs=()
+	for p in xorg-server-xvfb xorg-xauth; do
+		arch-chroot "$root" pacman -Q "$p" >/dev/null 2>&1 || smoke_pkgs+=("$p")
+	done
+	if (( ${#smoke_pkgs[@]} == 0 )) || pacman -r "$root" --config "$conf" -S --noconfirm "${smoke_pkgs[@]}" >/dev/null; then
+		arch-chroot "$root" runuser -u player -- sh -c \
+			'cd ~ && timeout 45 xvfb-run -a -s "-screen 0 1920x1080x24" /usr/bin/lumen-installer --no-padmap; echo "lumen-installer exit: $?"' 2>&1 | tail -n 80 || true
+		echo "--- calamares session.log"
+		tail -n 150 "$root/root/.cache/calamares/session.log" 2>/dev/null || echo "(no session.log)"
+		(( ${#smoke_pkgs[@]} == 0 )) || pacman -r "$root" --config "$conf" -Rns --noconfirm "${smoke_pkgs[@]}" >/dev/null || true
+	fi
+	rm -rf "$root/root/.cache/calamares" "$root/tmp/lumen-installer"
+fi
+
 # A fresh machine id on first boot, and no build leftovers.
 : > "$root/etc/machine-id"
 rm -rf "$root/var/cache/pacman/pkg/"* "$root/var/log/"*.log "$root/root/.bash_history"
+
+umount "$root"
 
 # --- Boot partition -------------------------------------------------------
 bootdir="$work/boot"

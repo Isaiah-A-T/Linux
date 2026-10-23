@@ -59,3 +59,19 @@ def loads(text):
 def load(path):
     with open(path, encoding="utf-8", errors="replace") as f:
         return loads(f.read())
+
+
+def _quote(s):
+    return '"' + str(s).replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def dumps(data, indent=0):
+    """Write nested dicts back out the way Steam formats its own files."""
+    out = []
+    pad = "\t" * indent
+    for key, value in data.items():
+        if isinstance(value, dict):
+            out.append(f"{pad}{_quote(key)}\n{pad}{{\n{dumps(value, indent + 1)}{pad}}}\n")
+        else:
+            out.append(f"{pad}{_quote(key)}\t\t{_quote(value)}\n")
+    return "".join(out)
