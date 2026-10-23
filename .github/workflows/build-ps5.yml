@@ -67,6 +67,8 @@ jobs:
     needs: kernel
     runs-on: ubuntu-latest
     timeout-minutes: 300
+    permissions:
+      contents: write  # publish the [lumen-ps5] kernel repo release
     steps:
       - name: Free disk space
         run: |
@@ -93,6 +95,16 @@ jobs:
           sudo chown -R "$USER" .
           sha256sum lumen-ps5.img.xz | tee SHA256SUMS
           ls -lh
+
+      # Consoles running Lumen update their kernel from this repo (System
+      # update and automatic updates), so a kernel bump here reaches them
+      # without reflashing.
+      - name: Publish the PS5 kernel repo
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: .github/ci/publish-repo.sh out/ps5-repo lumen-ps5-repo lumen-ps5
 
       - uses: actions/upload-artifact@v4
         with:

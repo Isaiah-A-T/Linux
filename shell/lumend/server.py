@@ -76,6 +76,7 @@ ROUTES = {
     ("GET", "/api/update"): lambda q, b: update.status(),
     ("POST", "/api/update/check"): lambda q, b: update.check(),
     ("POST", "/api/update/start"): lambda q, b: update.start(),
+    ("POST", "/api/update/auto"): lambda q, b: update.set_auto(b),
 
     ("GET", "/api/library"): lambda q, b: library.overview(),
     ("POST", "/api/library/refresh"): lambda q, b: (library.items(refresh=True), library.overview())[1],
@@ -95,7 +96,7 @@ ROUTES = {
     ("POST", "/api/store/install"): lambda q, b: store.install(b["source"], b["id"]),
     ("POST", "/api/store/remove"): lambda q, b: store.remove(b["source"], b["id"]),
 
-    ("GET", "/api/jobs"): lambda q, b: {"jobs": jobs.all_jobs()},
+    ("GET", "/api/jobs"): lambda q, b: {"jobs": jobs.all_jobs() + update.background_jobs()},
 
     ("GET", "/api/media"): lambda q, b: fun.media(),
     ("POST", "/api/media"): lambda q, b: fun.media_action(b.get("action")),

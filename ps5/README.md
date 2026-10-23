@@ -124,11 +124,30 @@ from the shell, or hold the power button.
   `sudo ./ps5_control --boost on` (about 3.5 GHz CPU, 2.23 GHz GPU).
 - **Game graphics glitches:** set the environment variable
   `RADV_DEBUG=nohiz` for that game.
-- **Kernel updates:** don't install Arch's `linux` package. Install a newer
-  `linux-ps5-*.pkg.tar.zst` with `sudo pacman -U`. It copies the new kernel to
-  the `boot` partition by itself.
+- **Updates** arrive by themselves, kernel included; see
+  [Kernel updates](#kernel-updates). Don't install Arch's `linux` package.
 - **Video memory:** `vram.txt` on the `boot` partition sets it (default
   `0x20000000`, 512 MB, which lets the GPU borrow more as needed).
+
+## Kernel updates
+
+Lumen on the PS5 updates like the PC version: automatically in the
+background, or from Settings › System update. No reflashing. Besides the
+system and the shell, it gets new builds of the ps5-linux kernel from the
+`[lumen-ps5]` repo, which the **Build PS5 image** workflow publishes on
+every push to `main`. A new kernel is only built when `PS5_LINUX_IMAGE_REF`
+in `.github/workflows/build-ps5.yml` is bumped to a ps5-linux release with a
+newer kernel version.
+
+When a new kernel is installed it is copied to the `boot` partition, and
+Lumen asks you to turn it off and start it again from the PS5 (don't use
+restart; that drops back to the PS5 system software). The kernel you had
+before is kept next to it as `bzImage.prev` and `initrd.img.prev`. If the
+new one doesn't start, put the USB drive in a PC, open the `boot` partition
+and rename those two to `bzImage` and `initrd.img`.
+
+You can still install a kernel package by hand with
+`sudo pacman -U linux-ps5-*.pkg.tar.zst`.
 
 ## Troubleshooting
 

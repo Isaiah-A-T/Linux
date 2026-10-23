@@ -65,6 +65,30 @@ release on every push to `main`.
 
 ![System update](docs/screenshots/system-update.png)
 
+### Automatic updates
+
+Installed systems, PC and PS5, keep themselves up to date. About ten minutes
+after starting and then every six hours, `lumen-auto-update.timer` checks the
+repos and downloads what's new in the background at low priority. It installs
+the updates only when no game is running (Steam, Epic, GOG or anything in
+Wine), waiting up to three hours for you to finish playing, and not on a
+metered connection or a low battery. While pacman is installing, Lumen holds
+off turning off and sleeping, so a power-off can't cut an update in half.
+When a new kernel or shell is installed, Settings › System update and
+Notifications ask you to restart (on a PS5: turn off and start Lumen again,
+since a restart drops back into the PS5 system software).
+
+Settings › System update › Automatic updates picks **Install automatically**
+(the default), **Download only** or **Off**. That's `AUTO_UPDATE` in
+`/etc/lumen/update.conf`; `AUTO_UPDATE_METERED=yes` there allows metered
+connections too.
+
+The PS5 also updates its kernel this way. `Build PS5 image` publishes the
+`linux-ps5` package to the `[lumen-ps5]` repo (the `lumen-ps5-repo`
+release), which only PS5 systems use. Before a new kernel goes in, the
+current one is kept on the `boot` partition as `bzImage.prev` and
+`initrd.img.prev`; see [ps5/README.md](ps5/README.md#kernel-updates).
+
 **Installer.** The ISO starts on a console-style power-on screen with
 **Set up Lumen OS**, **Try it first** and **Turn off**. Setup is Calamares
 with a custom QML theme that matches the shell: language, region, keyboard,
@@ -197,7 +221,8 @@ Not tested yet:
   with mock data.
 - **Store installs** from Flathub and Snap on an installed system.
 - **System update** end to end: updating an installed system from the
-  `[lumen]` repo.
+  `[lumen]` repo, by hand or automatically. The automatic update script has
+  only been run against stubbed pacman, NetworkManager and pgrep.
 - **The PS5 image.** No CI build of it has finished successfully yet (the
   first build of the current `main` was still running when this was
   written), and no one has booted it on a PS5.

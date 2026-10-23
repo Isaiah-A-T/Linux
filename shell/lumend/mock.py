@@ -40,6 +40,10 @@ state = {
         ],
         "apps": 3,
         "error": None,
+        "auto": {"mode": "install", "state": "downloaded", "time": time.time() - 3 * 3600,
+                 "count": 7, "message": "Ready to install", "running": False},
+        "reboot": False,
+        "ps5": False,
     },
     "media": {
         "available": True,

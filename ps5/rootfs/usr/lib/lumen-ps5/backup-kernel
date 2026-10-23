@@ -1,0 +1,11 @@
+#!/bin/bash
+# Run by lumen-ps5-kernel-backup.hook before linux-ps5 is upgraded: copy the
+# kernel the loader boots now to *.prev on the boot partition. Never fails the
+# update; a missing backup only means no way back without reflashing.
+boot=/boot/efi
+for f in bzImage initrd.img; do
+	[[ -s $boot/$f ]] || continue
+	cp -f "$boot/$f" "$boot/$f.prev.tmp" && mv -f "$boot/$f.prev.tmp" "$boot/$f.prev" ||
+		{ rm -f "$boot/$f.prev.tmp"; echo "backup-kernel: couldn't back up $f" >&2; }
+done
+exit 0

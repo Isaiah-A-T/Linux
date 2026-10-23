@@ -1,0 +1,13 @@
+# Checks for updates a while after starting up and then every six hours.
+# Turn automatic updates off in Settings › System update (AUTO_UPDATE in
+# /etc/lumen/update.conf), not by disabling this timer.
+[Unit]
+Description=Check for Lumen OS updates
+
+[Timer]
+OnBootSec=10min
+OnUnitInactiveSec=6h
+RandomizedDelaySec=20min
+
+[Install]
+WantedBy=timers.target
