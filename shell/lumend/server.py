@@ -10,7 +10,7 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import __version__, apps, art, fun, gamesettings, jobs, library, mock, store, system, update, users
+from . import __version__, apps, art, capture, fun, gamesettings, jobs, library, mock, resume, saves, store, system, update, users
 from .util import ApiError, mock_enabled
 
 
@@ -51,6 +51,12 @@ def _install_os(_q, _b):
     return {"ok": True}
 
 
+def _power(_q, b):
+    if b.get("action") == "suspend":
+        resume.before_sleep()
+    return system.power(b.get("action"))
+
+
 # (method, path) -> handler(query, body). Kept as one table so the whole API
 # is readable in one place.
 ROUTES = {
@@ -72,11 +78,12 @@ ROUTES = {
     ("POST", "/api/audio"): lambda q, b: system.audio_set(b.get("volume"), b.get("muted")),
     ("POST", "/api/brightness"): lambda q, b: system.brightness_set(b["level"]),
     ("POST", "/api/airplane"): lambda q, b: system.airplane_set(b.get("enabled")),
-    ("POST", "/api/power"): lambda q, b: system.power(b.get("action")),
+    ("POST", "/api/power"): _power,
     ("POST", "/api/install-os"): _install_os,
     ("GET", "/api/update"): lambda q, b: update.status(),
     ("POST", "/api/update/check"): lambda q, b: update.check(),
     ("POST", "/api/update/start"): lambda q, b: update.start(),
+    ("POST", "/api/update/auto"): lambda q, b: update.set_auto(b),
 
     ("GET", "/api/library"): lambda q, b: library.overview(),
     ("POST", "/api/library/refresh"): lambda q, b: (library.items(refresh=True), library.overview())[1],
@@ -86,6 +93,11 @@ ROUTES = {
     ("GET", "/api/game-settings"): lambda q, b: gamesettings.get(library.get(q.get("id", ""))["id"]),
     ("POST", "/api/game-settings"): lambda q, b: gamesettings.update(library.get(b["id"])["id"], b),
     ("POST", "/api/game-settings/restore"): lambda q, b: gamesettings.restore(),
+    ("GET", "/api/running"): lambda q, b: resume.status(),
+    ("POST", "/api/running/resume"): lambda q, b: (library.resume_game(b["id"]), resume.status())[1],
+    ("POST", "/api/running/close"): lambda q, b: resume.close(b["id"]),
+    ("GET", "/api/library/compat"): lambda q, b: library.compat(q.get("id", "")),
+    ("POST", "/api/library/compat"): lambda q, b: library.set_compat(b["id"], b.get("tool", "")),
     ("GET", "/api/accounts"): lambda q, b: {"accounts": library.accounts()},
     ("POST", "/api/accounts/connect"): lambda q, b: {"accounts": library.connect(b["launcher"], b)},
     ("POST", "/api/accounts/disconnect"): lambda q, b: {"accounts": library.disconnect(b["launcher"])},
@@ -97,11 +109,18 @@ ROUTES = {
     ("POST", "/api/store/install"): lambda q, b: store.install(b["source"], b["id"]),
     ("POST", "/api/store/remove"): lambda q, b: store.remove(b["source"], b["id"]),
 
-    ("GET", "/api/jobs"): lambda q, b: {"jobs": jobs.all_jobs()},
+    ("GET", "/api/jobs"): lambda q, b: {"jobs": jobs.all_jobs() + update.background_jobs()},
 
     ("GET", "/api/media"): lambda q, b: fun.media(),
     ("POST", "/api/media"): lambda q, b: fun.media_action(b.get("action")),
     ("GET", "/api/album"): lambda q, b: fun.album(),
+    ("GET", "/api/capture"): lambda q, b: capture.status(),
+    ("POST", "/api/capture"): lambda q, b: capture.update_settings(b),
+    ("POST", "/api/capture/screenshot"): lambda q, b: capture.screenshot(),
+    ("POST", "/api/capture/clip"): lambda q, b: capture.clip(),
+    ("GET", "/api/saves"): lambda q, b: saves.status(),
+    ("POST", "/api/saves"): lambda q, b: saves.set_enabled(b.get("enabled")),
+    ("POST", "/api/saves/sync"): lambda q, b: saves.sync_all(),
     ("GET", "/api/settings"): lambda q, b: fun.settings(),
     ("POST", "/api/settings"): lambda q, b: fun.update_settings(b),
 
@@ -227,5 +246,7 @@ def serve(port, ui_root, mode="session"):
     httpd.daemon_threads = True
     if mode == "session":
         threading.Thread(target=gamesettings.prepare, daemon=True).start()
+        capture.start()
+        resume.start(library.items() if mock_enabled() else None)
     print(f"lumend {__version__} ({mode}) on http://127.0.0.1:{port}/", flush=True)
     httpd.serve_forever()

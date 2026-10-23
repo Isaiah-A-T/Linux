@@ -7,6 +7,13 @@ port="${LUMEN_PORT:-7777}"
 state="${XDG_STATE_HOME:-$HOME/.local/state}/lumen/chromium"
 mkdir -p "$state"
 
+# lumend starts before gamescope, so tell it which display games go on.
+if [ -z "${1:-}" ] && [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+	mkdir -p "$XDG_RUNTIME_DIR/lumen"
+	printf 'DISPLAY=%s\nWAYLAND_DISPLAY=%s\nGAMESCOPE_WAYLAND_DISPLAY=%s\n' \
+		"${DISPLAY:-}" "${WAYLAND_DISPLAY:-}" "${GAMESCOPE_WAYLAND_DISPLAY:-}" >"$XDG_RUNTIME_DIR/lumen/display.env"
+fi
+
 # Wait for the daemon so the first paint is the shell, not an error page.
 i=0
 until python3 -c "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:$port/api/ping', timeout=1)" 2>/dev/null; do
@@ -14,6 +21,13 @@ until python3 -c "import urllib.request,sys; urllib.request.urlopen('http://127.
 	[ "$i" -ge 50 ] && break
 	sleep 0.2
 done
+
+# Inside gamescope: tell lumend which X display is gamescope's, so the
+# controller's screenshot button can reach it (shell/lumend/capture.py).
+if [ -n "${GAMESCOPE_WAYLAND_DISPLAY:-}" ] && [ -n "${DISPLAY:-}" ] && [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+	mkdir -p "$XDG_RUNTIME_DIR/lumen"
+	printf '%s\n' "$DISPLAY" >"$XDG_RUNTIME_DIR/lumen/gamescope-display"
+fi
 
 exec chromium \
 	--kiosk \

@@ -1,0 +1,15 @@
+[Unit]
+Description=Lumen OS automatic updates
+Documentation=https://github.com/Isaiah-A-T/Linux#automatic-updates
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/lumen/lumen-update-system auto
+# Stay out of the way of games: downloads and installs run at low priority.
+Nice=15
+IOSchedulingClass=idle
+CPUSchedulingPolicy=batch
+# pacman holds off shutdown itself (systemd-inhibit) while it installs.
+TimeoutStartSec=5h

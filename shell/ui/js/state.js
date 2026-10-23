@@ -7,6 +7,7 @@ export const state = {
   me: null,
   quick: null,
   jobs: [],
+  running: { front: null, items: [] },
   media: null,
   settings: null,
 };
@@ -38,6 +39,20 @@ export function pollJobs() {
     const running = state.jobs.some((j) => j.state === "running");
     jobTimer = setTimeout(pollJobs, running ? 1000 : 8000);
   });
+}
+
+// Games paused in Quick Resume, and what is on screen. Polled quickly while
+// anything runs, so the shell notices a game quitting or the Guide button.
+let runTimer = null;
+export function pollRunning() {
+  clearTimeout(runTimer);
+  refresh("running", "running").then(() => {
+    runTimer = setTimeout(pollRunning, state.running.items.length ? 1000 : 5000);
+  });
+}
+
+export function runningEntry(id) {
+  return state.running.items.find((r) => r.id === id) || null;
 }
 
 export function applyTheme(settings) {

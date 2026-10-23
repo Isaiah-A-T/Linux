@@ -1,9 +1,9 @@
 """The "fun" side of the top bar: music, screenshot album, theme."""
 
-import os
+import urllib.parse
 from pathlib import Path
 
-from . import mock
+from . import capture, mock
 from .util import ApiError, data_dir, load_json, mock_enabled, run, save_json
 
 ACCENTS = {
@@ -14,29 +14,37 @@ WALLPAPERS = ["aurora", "nebula", "grid", "dusk"]
 
 
 def album_dirs():
-    pics = Path(os.environ.get("XDG_PICTURES_DIR") or os.path.expanduser("~/Pictures"))
-    return [pics / "Screenshots", Path("/tmp")]
+    return [capture.shots_dir(), capture.clips_dir(), Path("/tmp")]
 
 
 def album():
     if mock_enabled():
         return {"shots": [
-            {"path": f"/api/mock-art/shot:{t}.svg?shape=hero", "title": t}
+            {"path": f"/api/mock-art/shot:{t}.svg?shape=hero", "title": t, "video": t == "Celeste"}
             for t in ("Hades", "Celeste", "Cyberpunk 2077", "Elden Ring", "Hollow Knight", "Valheim")
         ]}
     shots = []
     for d in album_dirs():
         if not d.is_dir():
             continue
-        pattern = "gamescope_*.png" if str(d) == "/tmp" else "*.png"
-        shots += sorted(d.glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
-    return {"shots": [{"path": f"/api/shot?path={p}", "title": p.stem} for p in shots[:60]]}
+        pattern = "gamescope_*.png" if str(d) == "/tmp" else "*.mp4" if d == capture.clips_dir() else "*.png"
+        shots += d.glob(pattern)
+    shots.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return {"shots": [{"path": f"/api/shot?path={urllib.parse.quote(str(p))}", "title": p.stem,
+                       "video": p.suffix == ".mp4"} for p in shots[:60]]}
 
 
 def album_allowed(path):
     p = Path(path).resolve()
-    return p.suffix == ".png" and any(
-        p.is_relative_to(d.resolve()) for d in album_dirs() if d.exists())
+    if p.suffix == ".mp4":
+        dirs = [capture.clips_dir()]
+    elif p.suffix == ".png":
+        dirs = [capture.shots_dir()]
+        if p.parent == Path("/tmp") and p.name.startswith("gamescope_"):
+            return True
+    else:
+        return False
+    return any(p.is_relative_to(d.resolve()) for d in dirs if d.exists())
 
 
 def media():

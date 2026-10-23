@@ -39,7 +39,12 @@ offline. Apps keep the normal background.
 ![Game details](docs/screenshots/game-details.png)
 
 **Launcher accounts.** Connect Steam, Epic and GOG under Library › Accounts.
-Steam games run through the Steam client and its own Proton. Epic games
+Steam games run through the Steam client and its own Proton.
+Lumen turns on Steam Play for every title before Steam's first start, so
+Windows-only games install and run with Proton Experimental without visiting
+Steam's settings, and Steam stays hidden behind Lumen while a game starts. A
+Steam game's page shows its ProtonDB rating and Steam Deck status, and lets
+you pick a different Proton for that game, or a custom build such as GE-Proton. Epic games
 (through `legendary`) and GOG games (through `gogdl`) download into
 `~/Games/<store>/` and run with GE-Proton through `umu-run`, each in its own
 Wine prefix under `~/Games/Prefixes/`. Plain Wine is installed too, for the
@@ -58,12 +63,34 @@ button layouts use InputPlumber.
   <img src="docs/screenshots/game-settings-buttons.png" width="49%" alt="Button layout">
 </p>
 
+**Quick Resume.** Press the Guide button in a game and you're back on Home,
+with the game paused right where you left it: it uses no CPU or GPU while
+paused, and picking it again carries on from the same frame. Up to three
+games stay paused at once (starting a fourth closes the one paused longest
+ago), they survive Sleep, and X › Close game ends one for good. Paused games
+don't survive a restart or signing out, and online games may drop their
+connection while paused. Apps such as music players keep running when you go
+Home.
+
 **Store** searches Flathub and the Snap Store at the same time and merges the
 results. An app that is in both shows once, preferring Flatpak. The app page
 has the icon, description, screenshots and which source it installs from.
 
 **Sign-in** is a PS5-style "Who's playing?" user picker with avatars and an
 optional PIN or password, running on greetd.
+
+**Screenshots and clips** work from the controller, even in a game. Guide + RB
+takes a screenshot and Guide + LB saves the last 30 seconds as a clip (on an
+Xbox Series controller, tap or hold Share). Both show up in Album on the top
+bar. Screenshots come from gamescope; clips come from `gpu-screen-recorder`
+running in replay mode, which can be turned off or set to 15 to 120 seconds
+in Settings › Saves & captures.
+
+**Cloud saves** use each store's own cloud. Steam Cloud is handled by Steam.
+For Epic and GOG games, Lumen pulls your saves before the game starts and
+uploads them once it (and everything in its Wine prefix) has exited, with
+`legendary sync-saves` and `gogdl save-sync`. Settings › Saves & captures has
+the switch and a Sync now button.
 
 **System update** (Settings › System update) updates the OS, the Lumen shell
 and your Flatpak and Snap apps in place, without reinstalling. Games, saves
@@ -72,6 +99,30 @@ come from the `[lumen]` pacman repo, which CI publishes to the `lumen-repo`
 release on every push to `main`.
 
 ![System update](docs/screenshots/system-update.png)
+
+### Automatic updates
+
+Installed systems, PC and PS5, keep themselves up to date. About ten minutes
+after starting and then every six hours, `lumen-auto-update.timer` checks the
+repos and downloads what's new in the background at low priority. It installs
+the updates only when no game is running (Steam, Epic, GOG or anything in
+Wine), waiting up to three hours for you to finish playing, and not on a
+metered connection or a low battery. While pacman is installing, Lumen holds
+off turning off and sleeping, so a power-off can't cut an update in half.
+When a new kernel or shell is installed, Settings › System update and
+Notifications ask you to restart (on a PS5: turn off and start Lumen again,
+since a restart drops back into the PS5 system software).
+
+Settings › System update › Automatic updates picks **Install automatically**
+(the default), **Download only** or **Off**. That's `AUTO_UPDATE` in
+`/etc/lumen/update.conf`; `AUTO_UPDATE_METERED=yes` there allows metered
+connections too.
+
+The PS5 also updates its kernel this way. `Build PS5 image` publishes the
+`linux-ps5` package to the `[lumen-ps5]` repo (the `lumen-ps5-repo`
+release), which only PS5 systems use. Before a new kernel goes in, the
+current one is kept on the `boot` partition as `bzImage.prev` and
+`initrd.img.prev`; see [ps5/README.md](ps5/README.md#kernel-updates).
 
 **Installer.** The ISO starts on a console-style power-on screen with
 **Set up Lumen OS**, **Try it first** and **Turn off**. Setup is Calamares
@@ -208,7 +259,12 @@ Not tested yet:
   and InputPlumber button layouts have only been checked against mock data
   and unit tests.
 - **System update** end to end: updating an installed system from the
-  `[lumen]` repo.
+  `[lumen]` repo, by hand or automatically. The automatic update script has
+  only been run against stubbed pacman, NetworkManager and pgrep.
+- **Quick Resume on real hardware.** The pausing and the Guide button are
+  covered by unit tests, but switching between the shell and a game relies on
+  gamescope's focus properties and has not been tried on a real session yet.
+  Steam may also keep the Guide button for its own overlay.
 - **The PS5 image.** No CI build of it has finished successfully yet (the
   first build of the current `main` was still running when this was
   written), and no one has booted it on a PS5.

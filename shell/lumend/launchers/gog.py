@@ -8,7 +8,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from .. import jobs
+from .. import jobs, resume, saves
 from ..util import ApiError, data_dir, games_dir, have, load_json, run, save_json
 from . import proton
 from .base import Launcher
@@ -201,5 +201,22 @@ class GOG(Launcher):
         exe = Path(game_dir) / task["path"].replace("\\", "/")
         cwd = Path(game_dir) / task.get("workingDir", "").replace("\\", "/")
         args = task.get("arguments", "").split() if task.get("arguments") else []
-        return subprocess.Popen([*wrapper, str(exe), *args], cwd=str(cwd), env={**proton.env_for("gog", game_id), **(env or {})},
-                                start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        env = {**proton.env_for("gog", game_id), **(env or {})}
+        owned = load_json(data_dir() / "gog-library.json", {}).get("games", [])
+        title = next((g["title"] for g in owned if g["id"] == game_id), game_id)
+        item_id = f"gog:{game_id}"
+        return saves.play(item_id, title, env["WINEPREFIX"],
+                          lambda: subprocess.Popen([*wrapper, str(exe), *args], cwd=str(cwd), env=env,
+                                                   start_new_session=True, stdout=subprocess.DEVNULL,
+                                                   stderr=subprocess.DEVNULL),
+                          lambda direction: self.sync_saves(game_id, direction),
+                          on_start=lambda proc: resume.attach(item_id, proc))
+
+    def installed_ids(self):
+        return list(load_json(self._installed_path(), {}))
+
+    def sync_saves(self, game_id, direction):
+        game_dir = load_json(self._installed_path(), {}).get(game_id)
+        if not game_dir:
+            return False
+        return saves.gogdl_sync(self._auth(), game_id, game_dir, proton.prefix_for("gog", game_id), direction)

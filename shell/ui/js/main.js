@@ -7,7 +7,7 @@ import { lastDevice, onAction } from "./input.js";
 import { closeAll } from "./layers.js";
 import { isOpen, openKeyboard } from "./osk.js";
 import { openQuickSettings } from "./quick.js";
-import { applyTheme, pollJobs, refresh, state } from "./state.js";
+import { applyTheme, pollJobs, pollRunning, refresh, state, subscribe } from "./state.js";
 import { renderTopbar } from "./topbar.js";
 import * as home from "./views/home.js";
 import * as library from "./views/library.js";
@@ -100,6 +100,9 @@ window.addEventListener("lumen:layers", paintHints);
 window.addEventListener("lumen:go", (e) => navigate(e.detail.view, e.detail.params));
 
 onAction((action, source) => {
+  // While a game is on screen the controller is the game's; lumend handles
+  // the Guide button and brings the shell back.
+  if (source === "gamepad" && state.running.front) return;
   const layer = topLayer();
   const f = focused();
   if (layer?.onAction?.(action, f)) return;
@@ -159,6 +162,25 @@ window.addEventListener("focus", () => {
   post("game-settings/restore").catch(() => {});
 });
 
+// Back from a game (Guide button, or the game quit): land on Home, where the
+// game you just left is the first tile.
+let front = null;
+subscribe((key) => {
+  if (key !== "running") return;
+  const was = front;
+  front = state.running.front;
+  if (was && !front) {
+    if (current()?.name === "home") {
+      // Home is already showing: rebuild it so the game moves to the front.
+      closeAll();
+      const entry = current();
+      mount(entry, "enter-back", { view: entry.view }, "leave-back");
+    } else {
+      goHome();
+    }
+  }
+});
+
 async function boot() {
   const params = new URLSearchParams(location.search);
   state.info = await get("info").catch(() => state.info);
@@ -179,6 +201,7 @@ async function boot() {
   refresh("media", "media");
   renderTopbar(document.getElementById("topbar"), { go: (v) => navigate(v) });
   pollJobs();
+  pollRunning();
   setInterval(() => refresh("quick", "quick"), 10000);
   setInterval(() => refresh("media", "media"), 8000);
 

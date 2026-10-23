@@ -65,11 +65,38 @@ airplane mode. Settings links to it instead of repeating those controls.
 
 * **Steam** runs its own client and Proton. Lumen reads installed games from
   `steamapps/appmanifest_*.acf` and hands launch and install to
-  `steam steam://rungameid/<id>` and `steam://install/<id>`.
+  `steam -silent steam://rungameid/<id>` and `steam://install/<id>`. lumend
+  sets Steam Play's default compat tool (`CompatToolMapping` "0" in
+  `config/config.vdf`) to Proton Experimental while Steam is closed, and
+  writes per-game Proton choices to the same table, closing Steam first
+  because it rewrites that file on exit. Custom Protons are read from
+  `compatibilitytools.d`.
 * **Epic** uses `legendary`, **GOG** uses `gogdl`. Both list the owned
   library, download into `~/Games/<store>/`, and launch through `umu-run`
   with GE-Proton. Each game gets its own prefix in `~/Games/Prefixes/`.
   Wine is also installed for the rare title that runs better outside Proton.
+
+## Quick Resume
+
+lumend tracks every game and app it starts (`shell/lumend/resume.py`). Each
+one is known by its process session (lumend starts it with
+`start_new_session`), or for Steam games by Steam's `reaper ... AppId=<id>`
+wrapper and everything below it.
+
+* **Going Home.** lumend reads the controllers' evdev devices itself
+  (`shell/lumend/pads.py`) because the shell's Chromium window doesn't get
+  input while a game has focus. A Guide press pauses the game on screen
+  (SIGSTOP on its whole process tree) and brings the shell back. While a game
+  is on screen the shell ignores the controller.
+* **What's on screen.** gamescope lists its windows with their pids in
+  `GAMESCOPE_FOCUSABLE_WINDOWS` and shows the one named in
+  `GAMESCOPECTRL_BASELAYER_WINDOW`. lumend sets that with `xprop`
+  (`shell/lumend/gamescope.py`), and keeps it on the game's newest window
+  while the game is up. lumen-ui writes gamescope's `DISPLAY` to
+  `$XDG_RUNTIME_DIR/lumen/display.env`, since lumend starts before gamescope.
+* **Resuming** sends SIGCONT and shows the game's window again. Three games
+  stay paused at most; the one paused longest ago is closed to make room.
+  Sleep pauses the game on screen first. Apps are tracked but never paused.
 
 ## Game art
 
@@ -107,6 +134,18 @@ The Store searches Flathub (`flathub.org/api/v2`) and the Snap Store
 When an app exists in both, it shows once, and Flatpak is preferred because it
 needs no extra daemon. The app page shows the icon, summary, description,
 screenshots and which source it will install from.
+
+## Captures and cloud saves
+
+`shell/lumend/capture.py` reads controllers straight from `/dev/input`
+(read only, nothing is grabbed), because the shell's Chromium doesn't see the
+pad while a game has focus. Guide + RB asks gamescope for a screenshot by
+setting `GAMESCOPECTRL_REQUEST_SCREENSHOT` on its X root window (lumen-ui
+writes gamescope's display to `$XDG_RUNTIME_DIR/lumen/gamescope-display`).
+Guide + LB sends SIGUSR1 to `gpu-screen-recorder`, which runs in replay mode.
+
+`shell/lumend/saves.py` wraps Epic and GOG launches: sync down, start the
+game, wait for its Wine prefix to go idle, sync up. Steam Cloud needs nothing.
 
 ## Milestones
 

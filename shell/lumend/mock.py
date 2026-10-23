@@ -40,6 +40,10 @@ state = {
         ],
         "apps": 3,
         "error": None,
+        "auto": {"mode": "install", "state": "downloaded", "time": time.time() - 3 * 3600,
+                 "count": 7, "message": "Ready to install", "running": False},
+        "reboot": False,
+        "ps5": False,
     },
     "media": {
         "available": True,
@@ -98,6 +102,31 @@ def library():
             },
         })
     return items
+
+
+# ProtonDB tier and Steam Deck status per mock Steam game.
+_COMPAT = {
+    "1145360": ("platinum", "verified"), "1091500": ("gold", "verified"), "504230": ("native", "verified"),
+    "413150": ("native", "verified"), "367520": ("native", "verified"), "1245620": ("gold", "verified"),
+    "620": ("native", "verified"), "892970": ("gold", "playable"), "1086940": ("platinum", "verified"),
+}
+_compat_choice = {"1091500": "GE-Proton10-4"}
+
+
+def steam_compat(appid):
+    from .launchers.steam import VALVE_PROTONS
+    tier, deck = _COMPAT.get(appid, (None, None))
+    tools = [{"id": t, "name": n} for t, n in VALVE_PROTONS] + [{"id": "GE-Proton10-4", "name": "GE-Proton10-4"}]
+    return {"tool": _compat_choice.get(appid, ""), "default": "Proton Experimental", "tools": tools,
+            "steam_running": False, "protondb": tier, "deck": deck}
+
+
+def set_steam_compat(appid, tool):
+    if tool:
+        _compat_choice[appid] = tool
+    else:
+        _compat_choice.pop(appid, None)
+    return steam_compat(appid)
 
 
 accounts = {

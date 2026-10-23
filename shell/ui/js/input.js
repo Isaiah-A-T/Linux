@@ -7,7 +7,7 @@
 
 const BUTTONS = {
   0: "accept", 1: "back", 2: "options", 3: "search", 4: "tabprev", 5: "tabnext",
-  8: "options", 9: "menu", 12: "up", 13: "down", 14: "left", 15: "right", 16: "home",
+  8: "options", 9: "menu", 12: "up", 13: "down", 14: "left", 15: "right", // 16 Guide: see poll()
 };
 const REPEATS = new Set(["up", "down", "left", "right", "tabprev", "tabnext"]);
 const KEYS = {
@@ -79,7 +79,19 @@ function poll(now) {
     let st = pads.get(gp.index);
     if (!st) pads.set(gp.index, (st = { held: new Map() }));
     const active = new Set(stickActions(gp));
+    // Guide + RB/LB takes a screenshot or clip (lumend watches for those), so
+    // Guide only goes Home when it's let go without a bumper, and the
+    // bumpers don't switch tabs while it's held.
+    const guide = gp.buttons[16]?.pressed;
+    if (guide) {
+      if (gp.buttons[4]?.pressed || gp.buttons[5]?.pressed) st.combo = true;
+    } else if (st.guide) {
+      if (!st.combo) emit("home", "gamepad");
+      st.combo = false;
+    }
+    st.guide = guide;
     gp.buttons.forEach((b, i) => {
+      if (guide && (i === 4 || i === 5)) return;
       if (b.pressed && BUTTONS[i]) active.add(BUTTONS[i]);
     });
     for (const action of active) {

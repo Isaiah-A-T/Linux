@@ -156,6 +156,28 @@ def fake(title, item_id=None, seconds=6.0, done_message="Installed", done_extra=
     return dict(job)
 
 
+def begin(title, item_id=None, message=""):
+    """A job the caller advances itself; finish it with end()."""
+    job = _new(title, item_id)
+    job["message"] = message
+    return job
+
+
+def end(job, ok=True, message=""):
+    job["message"] = message
+    if ok:
+        job["progress"] = 100.0
+    job["state"] = "done" if ok else "failed"
+
+
+def note(title, message, item_id=None):
+    """A finished entry that only tells the user something happened."""
+    job = _new(title, item_id)
+    job["note"] = True
+    end(job, True, message)
+    return dict(job)
+
+
 def all_jobs():
     with _lock:
         jobs = [dict(j) for j in _jobs.values()]

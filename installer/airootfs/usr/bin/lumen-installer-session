@@ -16,11 +16,19 @@ padmap=$!
 trap 'sudo -n kill "$padmap" 2>/dev/null' EXIT
 
 qml=$(command -v qml6 || echo /usr/lib/qt6/bin/qml)
+crashes=0
+
+# The PS5 image asks for a controller first (Bluetooth pairing); the ISO
+# doesn't ship this screen and goes straight to the power-on screen.
+if [[ -e "$share/pair.qml" ]]; then
+	QT_QPA_PLATFORM=xcb QML_XHR_ALLOW_FILE_READ=1 "$qml" "$share/pair.qml"
+fi
 
 while true; do
 	QT_QPA_PLATFORM=xcb "$qml" "$share/start.qml"
 	case $? in
 	0)
+		crashes=0
 		# Set up Lumen OS. If setup is cancelled, come back here.
 		/usr/bin/lumen-installer --no-padmap
 		;;
@@ -36,7 +44,15 @@ while true; do
 		exit 0
 		;;
 	*)
-		# The power-on screen crashed; don't strand the player.
+		# The power-on screen crashed; don't strand the player. After
+		# a few crashes in a row, open the shell (setup stays in the dock).
+		crashes=$((crashes + 1))
+		echo "lumen-installer-session: power-on screen exited ($crashes)"
+		if (( crashes >= 3 )); then
+			sudo -n kill "$padmap" 2>/dev/null
+			trap - EXIT
+			exec lumen-ui
+		fi
 		sleep 1
 		;;
 	esac

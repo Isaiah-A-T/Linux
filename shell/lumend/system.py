@@ -8,7 +8,7 @@ import glob
 import os
 import re
 
-from . import mock
+from . import mock, update
 from .util import ApiError, have, mock_enabled, run
 
 
@@ -286,6 +286,8 @@ def power(action):
         return {"ok": True}
     if action not in POWER_ACTIONS:
         raise ApiError(f"Unknown power action {action}")
+    if update.installing():
+        raise ApiError("Lumen is installing an update. You can turn it off as soon as that's done.")
     if not mock_enabled():
         run(POWER_ACTIONS[action])
     return {"ok": True}

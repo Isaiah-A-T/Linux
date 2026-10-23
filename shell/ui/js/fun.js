@@ -39,15 +39,18 @@ export function openAlbum() {
     h("h2", {}, "Album"),
     h("div.body",
       shots === null ? h("div.empty", h("span.spin")) :
-      shots.length === 0 ? h("div.empty", {}, "No screenshots yet. Press the Guide and Y buttons together in a game to take one.") :
+      shots.length === 0 ? h("div.empty", {}, "Nothing here yet. In a game, press Guide + RB for a screenshot or Guide + LB to save the last few seconds as a clip.") :
       h("div.album", { "data-group": true }, shots.map((s) =>
-        h("button.shot.f.ring", {
-          style: { backgroundImage: `url("${s.path}")` },
+        h(`button.shot.f.ring${s.video ? ".video" : ""}`, {
+          // A clip's tile shows its first frame.
+          style: { backgroundImage: s.video ? null : `url("${s.path}")` },
           onclick: () => openSheet(({ close }) => [
-            h("img", { src: s.path, style: { width: "100%", borderRadius: "1rem" } }),
+            s.video
+              ? h("video", { src: s.path, controls: true, autoplay: true, style: { width: "100%", borderRadius: "1rem" } })
+              : h("img", { src: s.path, style: { width: "100%", borderRadius: "1rem" } }),
             h("div.actions", h("button.btn.f.ring", { "data-autofocus": true, onclick: close }, "Close")),
           ], { cls: "detail" }),
-        })))),
+        }, s.video ? [h("video", { src: `${s.path}#t=0.1`, muted: true, preload: "metadata" }), icon("play")] : null)))),
   ]);
   get("album").then((r) => { shots = r.shots; blade.render(); });
 }
@@ -93,10 +96,16 @@ export function openNotifications() {
       h("h2", {}, "Notifications"),
       h("div.body",
         jobs.length === 0 ? h("div.empty", {}, "You're all caught up.") :
-        h("div.list", jobs.map((j) => h("div.job.f.ring",
-          h("b", {}, j.title),
-          h("small", {}, j.state === "running" ? `${Math.round(j.progress)}% · ${j.message || ""}` : j.state === "done" ? "Finished" : `Failed: ${j.message}`),
-          j.state === "running" ? h("div.meter", h("i", { style: { width: `${j.progress}%` } })) : null)))),
+        h("div.list", jobs.map((j) => {
+          // Automatic updates run in the background with no percentage.
+          const auto = j.item_id === "system:auto-update";
+          return h("div.job.f.ring",
+            h("b", {}, j.title),
+            h("small", {}, j.state === "running" ? (auto ? j.message : `${Math.round(j.progress)}% · ${j.message || ""}`)
+              : j.state === "done" ? (auto || j.note || j.item_id?.startsWith("saves:") ? j.message : "Finished") : `Failed: ${j.message}`),
+            j.state !== "running" ? null
+              : auto ? h("div.meter.busy", h("i")) : h("div.meter", h("i", { style: { width: `${j.progress}%` } })));
+        }))),
     ];
   }, { onClose: () => unsub?.() });
   unsub = subscribe((k) => k === "jobs" && blade.render());

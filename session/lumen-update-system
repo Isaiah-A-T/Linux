@@ -1,21 +1,39 @@
 #!/bin/bash
-# Root half of Settings › System update. lumend runs it through pkexec;
-# session/polkit/50-lumen.rules lets admins (wheel) do so without a password.
+# Root half of Settings › System update and of automatic updates. lumend runs
+# it through pkexec; session/polkit/50-lumen.rules lets admins (wheel) do so
+# without a password. lumen-auto-update.service runs `auto` on a timer.
 #
-#   lumen-update-system check     print pending updates, "name old -> new"
-#   lumen-update-system upgrade   update every pacman package (the OS and the
-#                                 Lumen shell) and any system-wide Flatpaks
+#   lumen-update-system check          print pending updates, "name old -> new"
+#   lumen-update-system upgrade        update every pacman package (the OS and
+#                                      the Lumen shell) and system-wide Flatpaks
+#   lumen-update-system auto           what the timer runs: download updates in
+#                                      the background and, unless a game is
+#                                      running, install them
+#   lumen-update-system set-auto MODE  install (default), download or off
 #
 # The Lumen shell and the packages built from the AUR come from the [lumen]
-# pacman repo that CI publishes on the repository's "lumen-repo" release. Set
-# LUMEN_REPO_URL in /etc/lumen/update.conf to use another one.
+# pacman repo that CI publishes on the repository's "lumen-repo" release. The
+# PS5 image also gets its kernel from [lumen-ps5] ("lumen-ps5-repo"). Set
+# LUMEN_REPO_URL or LUMEN_PS5_REPO_URL in /etc/lumen/update.conf to use
+# other ones.
 set -euo pipefail
 export LC_ALL=C
 
+CONF_FILE=/etc/lumen/update.conf
+STATUS_FILE=/var/lib/lumen/auto-update
+LOCK_FILE=/run/lumen-update.lock
+
 LUMEN_REPO_URL="https://github.com/Isaiah-A-T/Linux/releases/download/lumen-repo"
-[[ -r /etc/lumen/update.conf ]] && . /etc/lumen/update.conf
+LUMEN_PS5_REPO_URL="https://github.com/Isaiah-A-T/Linux/releases/download/lumen-ps5-repo"
+AUTO_UPDATE=install
+# shellcheck disable=SC1090
+[[ -r $CONF_FILE ]] && . "$CONF_FILE"
 
 conf=/etc/pacman.conf
+db=""
+trap '[[ -n $db ]] && rm -rf "$db"' EXIT
+
+is_ps5() { pacman -Qq linux-ps5 >/dev/null 2>&1; }
 
 # Systems installed before updates existed don't list the Lumen repo, and the
 # stock pacman.conf leaves multilib (Steam's 32-bit libraries) off.
@@ -24,18 +42,24 @@ ensure_repos() {
 		printf '\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' >> "$conf"
 	grep -q '^\[lumen\]' "$conf" ||
 		printf '\n[lumen]\nSigLevel = Optional TrustAll\nServer = %s\n' "$LUMEN_REPO_URL" >> "$conf"
+	# Only on the PS5: linux-ps5 "replaces" linux, so on a PC this repo would
+	# swap the kernel for one that can't boot it.
+	if is_ps5 && ! grep -q '^\[lumen-ps5\]' "$conf"; then
+		printf '\n[lumen-ps5]\nSigLevel = Optional TrustAll\nServer = %s\n' "$LUMEN_PS5_REPO_URL" >> "$conf"
+	fi
 }
 
-# Like checkupdates: sync a copy of the databases so the real ones stay put
-# (syncing them without upgrading would leave a partial upgrade behind).
-check() {
-	ensure_repos
-	local db
+# Like checkupdates: sync a copy of the databases into $db so the real ones
+# stay put (syncing them without upgrading would leave a partial upgrade
+# behind).
+sync_copy() {
 	db=$(mktemp -d /var/tmp/lumen-update.XXXXXX)
-	trap 'rm -rf "$db"' EXIT
 	ln -s /var/lib/pacman/local "$db/local"
 	cp -a /var/lib/pacman/sync "$db/" 2>/dev/null || true
 	pacman -Sy --dbpath "$db" --logfile /dev/null >/dev/null
+}
+
+pending() {
 	# -Qu exits 1 when nothing is out of date.
 	pacman -Qu --dbpath "$db" || [[ $? -eq 1 ]]
 }
@@ -50,16 +74,178 @@ enable_services() {
 	done
 }
 
+check() {
+	ensure_repos
+	sync_copy
+	pending
+}
+
+# One update at a time: Update now waits for an automatic one to finish.
+locked=0
+lock() {
+	(( locked )) && return 0
+	exec 9>"$LOCK_FILE"
+	flock "$@" 9 || return 1
+	locked=1
+}
+
+# Explicit returns: auto() calls this from an `if`, where set -e is off.
 upgrade() {
 	ensure_repos
+	lock
 	# A system left alone for months may not know the keys newer packages
 	# are signed with, so take the keyring first (the one partial upgrade
 	# Arch recommends).
-	pacman -Sy --needed --noconfirm archlinux-keyring
-	pacman -Su --noconfirm
+	pacman -Sy --needed --noconfirm archlinux-keyring || return 1
+	# Hold off shutdown and sleep while pacman writes the system: cutting
+	# power halfway through can leave it unable to start.
+	systemd-inhibit --what=shutdown:sleep --mode=block --who="Lumen OS" \
+		--why="Installing system updates" pacman -Su --noconfirm || return 1
 	enable_services
 	if command -v flatpak >/dev/null && [[ -n "$(flatpak list --system --columns=application)" ]]; then
-		flatpak update --system --noninteractive -y
+		flatpak update --system --noninteractive -y || return 1
+	fi
+}
+
+# --- Automatic updates ----------------------------------------------------
+
+# lumend shows this in Settings › System update.
+write_status() {
+	local state=$1 count=$2 message=$3
+	mkdir -p "$(dirname "$STATUS_FILE")"
+	printf 'state=%s\ntime=%s\ncount=%s\nmessage=%s\n' "$state" "$(date +%s)" "$count" "${message//$'\n'/ }" \
+		> "$STATUS_FILE.tmp"
+	mv "$STATUS_FILE.tmp" "$STATUS_FILE"
+}
+
+online() {
+	# NetworkManager knows; without it, try to reach the repo.
+	if command -v nmcli >/dev/null; then
+		[[ $(nmcli -t networking connectivity check 2>/dev/null) == full ]] && return 0
+	fi
+	curl -fsI --max-time 15 "$LUMEN_REPO_URL/lumen.db" >/dev/null 2>&1
+}
+
+metered() {
+	command -v nmcli >/dev/null || return 1
+	local dev
+	dev=$(ip route show default 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit }}')
+	[[ -n $dev ]] || return 1
+	[[ $(nmcli -t -g GENERAL.METERED device show "$dev" 2>/dev/null) == yes* ]]
+}
+
+# A laptop or handheld running on a low battery.
+low_battery() {
+	local bat
+	for bat in /sys/class/power_supply/*; do
+		[[ $(cat "$bat/type" 2>/dev/null) == Battery ]] || continue
+		[[ $(cat "$bat/status" 2>/dev/null) == Discharging ]] || continue
+		(( $(cat "$bat/capacity" 2>/dev/null || echo 100) < 40 )) && return 0
+	done
+	return 1
+}
+
+# Steam starts every game under its "reaper"; Epic and GOG games run through
+# umu-run, and anything in Wine keeps a wineserver.
+game_running() {
+	pgrep -f 'reaper SteamLaunch' >/dev/null ||
+		pgrep -f '(^|/)umu-run( |$)' >/dev/null ||
+		pgrep -x wineserver >/dev/null
+}
+
+# The players' own Flatpaks (the Store installs with --user).
+user_flatpaks() {
+	command -v flatpak >/dev/null || return 0
+	local home user
+	for home in /home/*; do
+		[[ -d $home/.local/share/flatpak/repo ]] || continue
+		user=$(stat -c %U "$home")
+		id "$user" >/dev/null 2>&1 || continue
+		runuser -u "$user" -- env HOME="$home" flatpak update --user --noninteractive -y ||
+			echo "lumen-update-system: Flatpak updates for $user failed" >&2
+	done
+}
+
+auto() {
+	if [[ -d /run/archiso || -e /var/lib/lumen/setup-pending ]]; then
+		echo "Not installed yet; nothing to do."
+		return 0
+	fi
+	case "$AUTO_UPDATE" in
+		install | download) ;;
+		*) echo "Automatic updates are off."; return 0 ;;
+	esac
+	if ! online; then
+		write_status offline 0 "No internet connection"
+		return 0
+	fi
+	if metered && [[ ${AUTO_UPDATE_METERED:-no} != yes ]]; then
+		write_status skipped 0 "Skipped on a metered connection"
+		return 0
+	fi
+	if ! lock -n; then
+		echo "An update is already running."
+		return 0
+	fi
+
+	ensure_repos
+	write_status checking 0 ""
+	sync_copy
+	local list count
+	list=$(pending)
+	count=$(grep -c . <<<"$list" || true)
+
+	if (( count )); then
+		echo "$count updates:"
+		echo "$list"
+		# Download into pacman's cache in the background, so installing (now
+		# or from Update now) is quick.
+		write_status downloading "$count" ""
+		pacman -Suw --noconfirm --dbpath "$db" --logfile /dev/null
+	fi
+
+	if [[ $AUTO_UPDATE == download ]]; then
+		if (( count )); then write_status downloaded "$count" "Ready to install"
+		else write_status current 0 ""; fi
+		return 0
+	fi
+	# Wait for the player to finish (up to three hours; the timer tries again
+	# later). Nothing is installed yet, so turning off meanwhile is fine.
+	local waited=0
+	while game_running || low_battery; do
+		if (( waited >= 180 )); then
+			write_status waiting "$count" "Will install after you finish playing"
+			return 0
+		fi
+		if game_running; then write_status waiting "$count" "Will install after you finish playing"
+		else write_status waiting "$count" "Will install once the battery is charged"; fi
+		sleep 60
+		waited=$(( waited + 1 ))
+	done
+
+	if (( count )); then
+		write_status installing "$count" ""
+		if ! upgrade; then
+			write_status failed "$count" "The update didn't finish. Try Update now in Settings."
+			return 1
+		fi
+	fi
+	user_flatpaks
+	if (( count )); then write_status installed "$count" ""
+	else write_status current 0 ""; fi
+}
+
+set_auto() {
+	case "${1:-}" in
+		install | download | off) ;;
+		*) echo "usage: lumen-update-system set-auto install|download|off" >&2; exit 2 ;;
+	esac
+	mkdir -p "$(dirname "$CONF_FILE")"
+	touch "$CONF_FILE"
+	if grep -q '^AUTO_UPDATE=' "$CONF_FILE"; then
+		sed -i "s/^AUTO_UPDATE=.*/AUTO_UPDATE=$1/" "$CONF_FILE"
+	else
+		printf 'AUTO_UPDATE=%s\n' "$1" >> "$CONF_FILE"
 	fi
 }
 
@@ -68,5 +254,7 @@ upgrade() {
 case "${1:-}" in
 	check) check; exit 0 ;;
 	upgrade) upgrade; exit 0 ;;
-	*) echo "usage: lumen-update-system check|upgrade" >&2; exit 2 ;;
+	auto) auto; exit $? ;;
+	set-auto) set_auto "${2:-}"; exit 0 ;;
+	*) echo "usage: lumen-update-system check|upgrade|auto|set-auto MODE" >&2; exit 2 ;;
 esac
