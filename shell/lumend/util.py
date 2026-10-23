@@ -44,6 +44,39 @@ def data_dir():
     return path
 
 
+def runtime_dir():
+    base = os.environ.get("XDG_RUNTIME_DIR") or f"/tmp/lumen-{os.getuid()}"
+    path = Path(base) / "lumen"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+_DISPLAY_KEYS = ("DISPLAY", "WAYLAND_DISPLAY", "GAMESCOPE_WAYLAND_DISPLAY")
+
+
+def display_env():
+    """The display the shell is on, as written by lumen-ui.
+
+    lumend starts before gamescope, so its own environment has no DISPLAY.
+    lumen-ui runs inside gamescope and records gamescope's displays for us.
+    """
+    env = {k: os.environ[k] for k in _DISPLAY_KEYS if os.environ.get(k)}
+    try:
+        lines = (runtime_dir() / "display.env").read_text().splitlines()
+    except OSError:
+        return env
+    for line in lines:
+        key, _, value = line.partition("=")
+        if key in _DISPLAY_KEYS and value:
+            env[key] = value
+    return env
+
+
+def session_env(extra=None):
+    """Environment for anything lumend starts on screen (games and apps)."""
+    return {**os.environ, **display_env(), **(extra or {})}
+
+
 def games_dir():
     path = Path(os.environ.get("LUMEN_GAMES_DIR") or os.path.expanduser("~/Games"))
     path.mkdir(parents=True, exist_ok=True)

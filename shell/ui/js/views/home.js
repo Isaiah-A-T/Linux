@@ -3,10 +3,10 @@
 import { get, post } from "../api.js";
 import { h, icon, SOURCE_LABEL, timeAgo } from "../dom.js";
 import { focus, onFocus } from "../focus.js";
-import { openDetails, launch } from "../details.js";
+import { openDetails, launch, runningBadge, runningText } from "../details.js";
 import { confirmSheet, toast } from "../layers.js";
 import { openPower } from "../quick.js";
-import { setGameHero, state } from "../state.js";
+import { runningEntry, setGameHero, state, subscribe } from "../state.js";
 
 export function render(ctx) {
   const kicker = h("div.kicker");
@@ -20,10 +20,11 @@ export function render(ctx) {
   function showHero(item) {
     const fade = h("div.fade");
     if (item) {
+      const run = runningEntry(item.id);
       fade.append(
-        h("div.kicker", {}, item.kind === "app" ? "App" : SOURCE_LABEL[item.source] || ""),
+        h("div.kicker", {}, run?.state === "paused" ? "Quick Resume" : item.kind === "app" ? "App" : SOURCE_LABEL[item.source] || ""),
         h("h1", {}, item.title),
-        h("div.meta", {}, timeAgo(item.last_played)));
+        h("div.meta", {}, run ? `${runningText(run)} · press A to jump back in` : timeAgo(item.last_played)));
       setGameHero(item);
     } else {
       fade.append(h("div.kicker", {}, "Lumen"), h("h1", {}, greeting()), h("div.meta", {}, "Your library, apps and store, all in one place."));
@@ -35,6 +36,25 @@ export function render(ctx) {
   const off = onFocus((f) => {
     if (!el.contains(f)) return;
     showHero(f._item || null);
+  });
+
+  function paintBadges() {
+    for (const t of row.querySelectorAll(".tile")) {
+      if (!t._item) continue;
+      t.querySelector(".qr")?.remove();
+      const badge = runningBadge(t._item);
+      if (badge) t.append(badge);
+    }
+  }
+  let lastRun = "";
+  const offRun = subscribe((key) => {
+    if (key !== "running") return;
+    const now = JSON.stringify(state.running.items.map((r) => [r.id, r.state]));
+    if (now === lastRun) return;
+    lastRun = now;
+    paintBadges();
+    const f = document.querySelector(".focused");
+    if (f && row.contains(f)) showHero(f._item || null);
   });
 
   get("home").then(({ items }) => {
@@ -53,6 +73,7 @@ export function render(ctx) {
     const all = h("button.tile.all.f.ring", { onclick: () => ctx.go("library") },
       h("div", icon("grid"), h("span", {}, "All software")));
     row.replaceChildren(...tiles, all);
+    paintBadges();
     if (!document.querySelector(".blade, .sheet")) focus(tiles[0] || all);
     if (!items.length) showHero(null);
     ctx.ready();
@@ -86,7 +107,7 @@ export function render(ctx) {
       }
       return false;
     },
-    destroy: off,
+    destroy() { off(); offRun(); },
   };
 }
 

@@ -34,4 +34,6 @@ class Launcher:
         raise NotImplementedError
 
     def launch(self, game_id):
+        """Start the game. Returns its Popen, or None when another client
+        (Steam) starts it for us."""
         raise NotImplementedError

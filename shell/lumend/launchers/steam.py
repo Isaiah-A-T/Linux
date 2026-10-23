@@ -13,7 +13,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from ..util import ApiError, data_dir, have, load_json, run, save_json
+from ..util import ApiError, data_dir, have, load_json, run, save_json, session_env
 from . import vdf
 from .base import Launcher
 
@@ -260,7 +260,7 @@ class Steam(Launcher):
                 raise ApiError("Steam isn't installed.")
             enable_steam_play()
             subprocess.Popen(["steam", "-silent" if payload.get("api_key") else "steam://open/main"],
-                             start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                             env=session_env(), start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return self.describe()
 
     def disconnect(self):
@@ -322,7 +322,7 @@ class Steam(Launcher):
         # -silent keeps Steam's own window from covering Lumen; the game (or
         # Steam's install dialog) still comes to the front.
         args = ["steam", "-silent", url] if quiet else ["steam", url]
-        subprocess.Popen(args, start_new_session=True,
+        subprocess.Popen(args, env=session_env(), start_new_session=True,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def compat(self, game_id):
