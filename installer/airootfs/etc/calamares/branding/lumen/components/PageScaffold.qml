@@ -58,6 +58,8 @@ FocusScope {
         }
     }
 
+    // The page sits between the 64px status and button bars.
+    ViewSize { extraHeight: 2 * Theme.barHeight }
     Backdrop { anchors.fill: parent; originY: Theme.barHeight }
 
     Item {

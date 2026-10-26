@@ -79,4 +79,10 @@ python -m venv .venv && .venv/bin/pip install PySide6
 .venv/bin/python installer/preview/preview.py installer/preview/out
 ```
 
+`--screen 3840x2160 --window 1280x800` renders a window smaller than the
+screen, which is what gamescope shows when a window isn't fullscreen; every
+screen should still fit its window. The time zone and keyboard lists use
+the machine's own tz and XKB data when it has them, so they are as long as
+in Calamares.
+
 This writes one PNG per screen at 1920x1080.

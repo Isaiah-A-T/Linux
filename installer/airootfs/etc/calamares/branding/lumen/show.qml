@@ -8,6 +8,9 @@ Item {
     property bool active: false
     property int slide: 0
 
+    // Calamares' progress bar sits under the slideshow; size by width.
+    ViewSize { useHeight: false }
+
     function onActivate() { active = true; slide = 0 }
     function onLeave() { active = false }
 

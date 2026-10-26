@@ -10,9 +10,30 @@ runtime="${XDG_RUNTIME_DIR:-/tmp/lumen-greeter-$(id -u)}"
 mkdir -p "$runtime"
 export XDG_STATE_HOME="$runtime/state"
 export XDG_DATA_HOME="$runtime/data"
+export XDG_CONFIG_HOME="$runtime/config"
+export XDG_CACHE_HOME="$runtime/cache"
+
+# Per-image settings, the same ones lumen-session reads. On the PS5 image
+# they hold the display and seat settings without which the sign-in screen
+# stays black (no input devices at boot, the DP-1 bridge).
+# shellcheck disable=SC1091
+[ -r /etc/lumen/session.conf ] && . /etc/lumen/session.conf
 
 lumend --mode greeter &
 daemon=$!
 trap 'kill "$daemon" 2>/dev/null' EXIT INT TERM
+
+# Images that set LUMEN_GREETER_GAMESCOPE (the PS5) show the sign-in screen
+# through gamescope, like the console session and setup, which are known to
+# reach their display. cage stays the fallback, and the default elsewhere.
+if [ -n "${LUMEN_GREETER_GAMESCOPE:-}" ] && command -v gamescope >/dev/null 2>&1; then
+	started=$(date +%s)
+	# shellcheck disable=SC2086
+	gamescope ${LUMEN_GAMESCOPE_ARGS:-} -- lumen-ui "?mode=greeter" && exit 0
+	if [ $(($(date +%s) - started)) -ge 15 ]; then
+		exit 1
+	fi
+	echo "lumen-greeter: gamescope failed, using cage" >&2
+fi
 
 cage -s -- lumen-ui "?mode=greeter"
