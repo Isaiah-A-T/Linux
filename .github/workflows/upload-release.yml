@@ -1,0 +1,33 @@
+name: Upload release builds
+
+# Attach the ISO and PS5 image from finished "Build ISO" and
+# "Build PS5 image" runs to a release.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag
+        required: true
+      iso_run:
+        description: Build ISO run id
+        required: true
+      ps5_run:
+        description: Build PS5 image run id
+        required: true
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          ISO_RUN: ${{ inputs.iso_run }}
+          PS5_RUN: ${{ inputs.ps5_run }}
+        run: .github/ci/upload-release.sh "$TAG" "$ISO_RUN" "$PS5_RUN"
