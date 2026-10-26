@@ -12,12 +12,15 @@ import "../../../etc/calamares/branding/lumen/components"
 
 Window {
     id: win
-    width: 1920
-    height: 1080
+    // Cover the screen even where fullscreen isn't honoured.
+    width: Screen.width > 0 ? Screen.width : 1920
+    height: Screen.height > 0 ? Screen.height : 1080
     visible: true
     visibility: Window.FullScreen
     color: Theme.bg0
     title: "Lumen OS"
+
+    ViewSize {}
 
     property bool started: false
 

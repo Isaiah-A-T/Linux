@@ -15,17 +15,28 @@ ListView {
     signal picked(int index)
 
     // Rows fade and rise in one after another (45ms apart), counted from
-    // the first row on screen.
+    // the first row on screen. The start row is only known once the list
+    // has scrolled to the current row (a time zone or layout far down a
+    // long list), so it is picked after that scroll.
     function playIn() {
-        revealBase = Math.max(0, indexAt(width / 2, contentY + Theme.rem(1.5)));
         reveal = 0;
+        Qt.callLater(startReveal_);
+    }
+    function startReveal_() {
+        // A current row far down a long list opens in the middle, with
+        // its neighbours around it.
+        if (currentIndex > 0 && currentIndex < count - 1) positionViewAtIndex(currentIndex, ListView.Center);
+        else reveal_();
+        revealBase = Math.max(0, indexAt(width / 2, contentY + Theme.rem(1.5)));
         revealAnim.restart();
-        Qt.callLater(reveal_);
     }
     NumberAnimation {
         id: revealAnim
         target: list; property: "reveal"
         from: 0; to: 14; duration: 14 * 45
+        // Only the first screenful animates; every row must end up
+        // visible, including ones scrolled to or loaded later.
+        onFinished: list.reveal = 1000
     }
 
     clip: true

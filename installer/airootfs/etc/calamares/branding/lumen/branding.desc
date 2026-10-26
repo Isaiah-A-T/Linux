@@ -13,7 +13,11 @@ welcomeStyleCalamares:   false
 welcomeExpandingLogo:    true
 
 windowExpanding:    fullscreen
-windowSize:         1280px,800px
+# "fullscreen" only asks the window manager to maximize the window, and
+# gamescope doesn't: it showed the window at this size, stretched to the
+# screen. Calamares caps the size at the screen's, so ask for more than
+# any screen has and the window covers it either way.
+windowSize:         7680px,4320px
 windowPlacement:    center
 
 sidebar:    qml,top

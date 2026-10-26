@@ -12,7 +12,7 @@ tiles, no desktop and no windows.
  power on
    │
    ▼
- systemd ──► greetd ──► lumen-greeter (cage + Chromium kiosk)
+ systemd ──► greetd ──► lumen-greeter (cage, or gamescope on the PS5, + Chromium kiosk)
                          │  PS5-style user tiles, PIN/password
                          │  talks to greetd over $GREETD_SOCK via lumend
                          ▼

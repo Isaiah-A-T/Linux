@@ -12,6 +12,7 @@ Item {
     height: Theme.barHeight
     implicitHeight: Theme.barHeight
 
+    ViewSize { useHeight: false }
     Backdrop { anchors.fill: parent; originY: 0 }
 
     Row {

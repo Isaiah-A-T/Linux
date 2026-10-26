@@ -10,14 +10,41 @@ PySide6:
     venv/bin/python installer/preview/preview.py out/
 
 Each screen is laid out the way Calamares does it (status bar on top,
-page in the middle, button bar at the bottom) at 1920x1080.
+page in the middle, button bar at the bottom) at 1920x1080, or at the
+sizes given with --screen and --window.
 """
+import json
 import os
 import sys
+import tempfile
 
-# A 1920x1080 offscreen screen, so Theme.rem() scales like a 1080p TV.
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen:configfile=" + os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "offscreen.json"))
+# Optional sizes, e.g. "--screen 3840x2160 --window 1280x800" to check
+# that the screens fit a window smaller than the screen (what gamescope
+# does to a window it doesn't make fullscreen).
+def _size_arg(flag, default):
+    if flag in sys.argv:
+        i = sys.argv.index(flag)
+        value = sys.argv[i + 1]
+        del sys.argv[i:i + 2]
+        w, h = value.lower().split("x")
+        return int(w), int(h)
+    return default
+
+
+SCREEN = _size_arg("--screen", (1920, 1080))
+WINDOW = _size_arg("--window", SCREEN)
+
+# An offscreen screen (1920x1080 by default, so Theme.rem() scales like a
+# 1080p TV).
+_offscreen = os.path.join(os.path.dirname(os.path.abspath(__file__)), "offscreen.json")
+if SCREEN != (1920, 1080):
+    with open(_offscreen) as f:
+        conf = json.load(f)
+    conf["screens"][0].update(width=SCREEN[0], height=SCREEN[1])
+    _offscreen = os.path.join(tempfile.mkdtemp(), "offscreen.json")
+    with open(_offscreen, "w") as f:
+        json.dump(conf, f)
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen:configfile=" + _offscreen)
 os.environ.setdefault("QT_QUICK_BACKEND", "software")
 
 from PySide6.QtCore import (QAbstractListModel, QByteArray, QEnum, QModelIndex, QObject,
@@ -162,6 +189,31 @@ class ZoneFilter(QSortFilterProxyModel):
     region = Property(str, lambda s: s._region, _set, notify=regionChanged)
 
 
+def real_zones():
+    try:
+        with open("/usr/share/zoneinfo/zone1970.tab") as f:
+            names = [l.split("\t")[2].strip() for l in f if l.strip() and not l.startswith("#")]
+    except OSError:
+        return []
+    return sorted(tuple(n.split("/", 1)) for n in names if "/" in n)
+
+
+def real_layouts():
+    """Layout descriptions from XKB's base.lst, sorted like Calamares."""
+    try:
+        with open("/usr/share/X11/xkb/rules/base.lst") as f:
+            lines = f.read().split("\n")
+    except OSError:
+        return []
+    out, section = [], ""
+    for l in lines:
+        if l.startswith("!"):
+            section = l[1:].strip()
+        elif section == "layout" and l.strip():
+            out.append(l.strip().split(None, 1)[1])
+    return sorted(out)
+
+
 def build_models():
     langs = [("American English", "American English"), ("Español", "Spanish"), ("Français", "French"),
              ("Deutsch", "German"), ("Italiano", "Italian"), ("Português (Brasil)", "Portuguese (Brazil)"),
@@ -178,6 +230,10 @@ def build_models():
     zones = [("America", z) for z in ["Anchorage", "Chicago", "Denver", "Los_Angeles", "Mexico_City",
                                        "New_York", "Phoenix", "Puerto_Rico", "Sao_Paulo", "Toronto", "Vancouver"]]
     zones += [("Europe", z) for z in ["Amsterdam", "Berlin", "London", "Madrid", "Paris", "Rome"]]
+    # Real lists are much longer than the sample (America alone has over a
+    # hundred zones, and the preselected rows sit far down), which is what
+    # long-list bugs need; use the system's tz and XKB data when present.
+    zones = real_zones() or zones
     zone_model = string_model([{"name": z.replace("_", " "), "key": z, "region": r} for r, z in zones],
                               ["name", "key", "region"])
     regional = ZoneFilter(zone_model)
@@ -185,6 +241,9 @@ def build_models():
 
     layouts = IndexedModel(["English (US)", "English (UK)", "French", "German", "Japanese", "Portuguese (Brazil)",
                             "Spanish", "Spanish (Latin American)", "Swedish"], 0)
+    xkb = real_layouts()
+    if xkb:
+        layouts = IndexedModel(xkb, xkb.index("English (US)") if "English (US)" in xkb else 0)
     variants = IndexedModel(["Default", "English (US, intl., with dead keys)", "English (Colemak)",
                              "English (Dvorak)", "English (Macintosh)"], 0)
 
@@ -281,7 +340,7 @@ SHELL = """
 import QtQuick
 import QtQuick.Window
 Window {
-    width: 1920; height: 1080; visible: true; color: "#07090d"
+    width: %(w)d; height: %(h)d; visible: true; color: "#07090d"
     property alias page: pageLoader.item
     Loader { id: top; anchors { left: parent.left; right: parent.right; top: parent.top }
              height: %(bars)s ? 64 : 0; active: %(bars)s; source: "%(branding)s/calamares-sidebar.qml" }
@@ -344,7 +403,7 @@ def main():
             comp.loadUrl(QUrl.fromLocalFile(START))
         else:
             comp.setData((SHELL % {"branding": QUrl.fromLocalFile(BRANDING).toString(), "page": page,
-                                   "bars": bars}).encode(),
+                                   "bars": bars, "w": WINDOW[0], "h": WINDOW[1]}).encode(),
                          QUrl.fromLocalFile(os.path.join(HERE, "shell.qml")))
         win = comp.create()
         if win is None:
@@ -352,7 +411,7 @@ def main():
         if page == "start":
             # It asks for fullscreen; the offscreen platform makes that 800x800.
             win.setVisibility(QWindow.Windowed)
-            win.resize(1920, 1080)
+            win.resize(*WINDOW)
         wait(app, 900)
         for key in keys:
             QTest.keyClick(win, key)

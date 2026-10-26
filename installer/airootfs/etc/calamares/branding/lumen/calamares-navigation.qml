@@ -35,7 +35,8 @@ Item {
         onActivated: ViewManager.back()
     }
 
-    Backdrop { anchors.fill: parent; originY: Theme.screenHeight - Theme.barHeight }
+    ViewSize { useHeight: false }
+    Backdrop { anchors.fill: parent; originY: Theme.viewH - Theme.barHeight }
 
     Row {
         anchors.left: parent.left

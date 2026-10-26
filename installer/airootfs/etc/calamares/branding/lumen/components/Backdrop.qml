@@ -2,8 +2,8 @@
 // (accent, blue, violet) drifting slowly, under a top-lit vignette.
 //
 // Calamares draws the top bar, each page and the bottom bar in separate
-// windows, so every Backdrop lays its blobs out in whole-screen
-// coordinates (originY = where this item sits on screen) and derives
+// windows, so every Backdrop lays its blobs out in whole-window
+// coordinates (originY = where this item sits in the window) and derives
 // the drift from the wall clock. The pieces then line up into one
 // continuous background.
 import QtQuick
@@ -15,8 +15,8 @@ Rectangle {
 
     property real originY: 0
     property real intensity: 1.0
-    readonly property real sw: Theme.screenWidth
-    readonly property real sh: Theme.screenHeight
+    readonly property real sw: Theme.viewW
+    readonly property real sh: Theme.viewH
     readonly property real vmax: Math.max(sw, sh) / 100
     property real now: Date.now()
 

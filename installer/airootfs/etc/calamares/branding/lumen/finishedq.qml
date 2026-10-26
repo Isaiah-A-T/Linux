@@ -15,6 +15,8 @@ FocusScope {
     }
     function onLeave() {}
 
+    ViewSize { extraHeight: 2 * Theme.barHeight }
+
     // On the PS5 USB image setup configures the running system instead of
     // installing to a disk, and the USB drive has to stay in.
     // ps5/build.sh writes the marker file.

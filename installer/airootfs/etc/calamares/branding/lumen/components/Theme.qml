@@ -2,18 +2,25 @@
 // shell/ui/css/lumen.css so setup looks like the console it installs.
 //
 // Sizes are in "rem" like the shell: designed at 1920x1080 where
-// 1rem = 16px, scaling with the screen width (width / 120, clamped
-// 10-32px). Use Theme.rem(n) for any length.
+// 1rem = 16px, scaling with the window so the 16:9 design fits it at any
+// resolution (the smaller of width / 120 and height / 67.5). Use
+// Theme.rem(n) for any length.
 pragma Singleton
 import QtQuick
 
 QtObject {
     id: theme
 
-    // Screen the installer runs on (gamescope's output under Lumen).
+    // Screen the installer runs on (gamescope's output under Lumen); only
+    // used until a ViewSize reports the window's size.
     readonly property real screenWidth: Qt.application.screens.length ? Qt.application.screens[0].width : 1920
     readonly property real screenHeight: Qt.application.screens.length ? Qt.application.screens[0].height : 1080
-    readonly property real u: Math.max(10, Math.min(32, screenWidth / 120))
+    // Set by ViewSize (components/ViewSize.qml).
+    property real viewWidth: 0
+    property real viewHeight: 0
+    readonly property real viewW: viewWidth > 0 ? viewWidth : screenWidth
+    readonly property real viewH: viewHeight > 0 ? viewHeight : screenHeight
+    readonly property real u: Math.max(6, Math.min(64, viewW / 120, viewH / 67.5))
     function rem(n) { return Math.round(n * u) }
 
     // Colour tokens (lumen.css :root)

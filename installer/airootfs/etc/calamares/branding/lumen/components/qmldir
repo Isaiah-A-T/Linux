@@ -10,3 +10,4 @@ PageScaffold 1.0 PageScaffold.qml
 LumenMark 1.0 LumenMark.qml
 FocusRing 1.0 FocusRing.qml
 Panel 1.0 Panel.qml
+ViewSize 1.0 ViewSize.qml
